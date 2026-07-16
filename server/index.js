@@ -1,15 +1,18 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config({ path: '../.env' }); // Load from root if exists
-
+const dotenv = require('dotenv');
+const cookieParser = require('cookie-parser');
 const routes = require('./routes');
 
-// Create the Express application
+// Load environment variables
+dotenv.config({ path: '../.env' });
+
 const app = express();
 
-// Register middleware
+// Middleware
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 
 // Register routes
 app.use('/', routes);

@@ -1,10 +1,10 @@
 # MISTER CODERZ Vault Project Status
 
 ## Current Phase
-Phase 5 - Asset Metadata Management
+Phase 6 - Authentication System
 
 ## Current Task
-Completed Phase 5 API implementation. Ready for review.
+Completed Phase 6 implementation. Ready for review.
 
 ## Completed
 - [x] Phase 0 - Foundation Setup
@@ -12,15 +12,13 @@ Completed Phase 5 API implementation. Ready for review.
 - [x] Phase 2 - Domain Modeling
 - [x] Phase 3 - Functional Specification
 - [x] Phase 4 - Database Foundation
-- [x] Removed `version` from `Asset` schema.
-- [x] Added `isDeleted` to `Asset` schema to support soft deletes.
-- [x] Generated Prisma Client.
-- [x] Developed API response formatter with dedicated BigInt serialization helper.
-- [x] Implemented `GET /api/categories` endpoint.
-- [x] Implemented Asset CRUD operations (`GET`, `POST`, `PUT`, `DELETE`).
-- [x] Ensured `DELETE /api/assets/:id` performs a soft delete.
-- [x] Ensured standard `GET /api/assets` endpoints filter out deleted assets.
-- [x] Registered routes in `server/routes/index.js`.
+- [x] Phase 5 - Asset Metadata Management
+- [x] Installed `jsonwebtoken`, `bcryptjs`, `cookie-parser`, `express-rate-limit`.
+- [x] Implemented `server/controllers/authController.js` requiring both `username` and `password`.
+- [x] Enforced `httpOnly`, `sameSite: 'strict'` cookie transmission for JWTs.
+- [x] Applied `express-rate-limit` to the login endpoint (max 5 attempts per 15 minutes).
+- [x] Built `requireAuth` middleware to protect `/api/assets` mutative routes.
+- [x] Updated `.env.example` with standard Auth variables.
 
 ## In Progress
 None.
@@ -32,10 +30,12 @@ None for this phase.
 None.
 
 ## Notes
-- Phase 5 focused on building the metadata management layer, allowing the future Upload Pipeline to strictly focus on binary handling.
-- The `isDeleted` soft-delete pattern successfully safeguards historical data.
-- The dedicated `serializeBigInt` logic securely formats `BigInt` properties for JSON responses without mutating global JS prototypes.
-- Awaiting review before beginning Phase 6.
+- Phase 6 secures all database modification routes while perfectly preserving public access to `GET` endpoints.
+- Integration testing script (`server/scripts/test-auth.js`) confirmed:
+  - Unauthenticated mutating routes return 401.
+  - Successful login returns HTTP-Only Set-Cookie and yields authorized access (bypassing 401 error, returning expected 400 validation instead due to dummy data).
+  - Rate Limiting throws 429 correctly after 5 false attempts.
+- Awaiting review before beginning Phase 7.
 
 ## Next Phase
-Phase 6 - TBD
+Phase 7 - TBD
