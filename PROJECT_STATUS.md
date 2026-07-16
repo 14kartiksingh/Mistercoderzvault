@@ -1,17 +1,20 @@
 # MISTER CODERZ Vault Project Status
 
 ## Current Phase
-Phase 2 - Domain Modeling
+Phase 3 - Functional Specification
 
 ## Current Task
-Completed Phase 2 domain modeling documentation. Ready for review.
+Completed Phase 3 functional specification documentation. Ready for review.
 
 ## Completed
 - [x] Phase 0 - Foundation Setup
 - [x] Phase 1 - Backend Architecture
-- [x] Defined core domain entities (Asset, Category, Tag, File Type, Version, Description, Thumbnail, Visibility, Metadata)
-- [x] Established 1-to-1 Asset-to-Physical-File relationship to simplify metadata and future backend implementations.
-- [x] Documented the ubiquitous language and ASCII ERD in `docs/DOMAIN_MODEL.md`.
+- [x] Phase 2 - Domain Modeling
+- [x] Documented complete Functional Specification in `docs/FUNCTIONAL_SPECIFICATION.md`.
+- [x] Defined all workflows (Admin Upload, Browsing, Search, Asset Layout, Download).
+- [x] Documented both Success and Failure paths for every workflow.
+- [x] Documented Non-Functional Requirements (Performance, Security, Usability, Responsiveness, Reliability).
+- [x] Documented Open Questions for future phases.
 
 ## In Progress
 None.
@@ -23,9 +26,8 @@ None for this phase.
 None.
 
 ## Notes
-- Phase 2 focused entirely on documentation. No source code or types were introduced.
-- `docs/DOMAIN_MODEL.md` now acts as the single source of truth for the application's domain language.
-- Awaiting review before beginning Phase 3.
+- Phase 3 focused purely on specifying product behavior. No technical implementations, databases, or APIs were added.
+- Awaiting review before beginning Phase 4.
 
 ## Next Phase
-Phase 3 - TBD
+Phase 4 - TBD
