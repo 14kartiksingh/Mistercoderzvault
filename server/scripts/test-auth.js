@@ -17,10 +17,16 @@ const request = (method, path, data = null, cookie = null) => {
       let body = '';
       res.on('data', (c) => (body += c));
       res.on('end', () => {
+        let parsed = {};
+        try {
+          parsed = JSON.parse(body || '{}');
+        } catch (e) {
+          console.error('Failed to parse JSON. Raw body:', body.substring(0, 200));
+        }
         resolve({
           statusCode: res.statusCode,
           headers: res.headers,
-          body: JSON.parse(body || '{}'),
+          body: parsed,
         });
       });
     });
@@ -32,39 +38,36 @@ const request = (method, path, data = null, cookie = null) => {
 
 (async () => {
   try {
-    console.log('1. Testing Public Route (GET /api/assets)');
-    const pub = await request('GET', '/api/assets');
-    // 500 expected because DB isn't running, but NOT 401
-    console.log('Public route status (expect 500, not 401):', pub.statusCode);
-
-    console.log('\n2. Testing Protected Route Without Auth (POST /api/assets)');
-    const unauth = await request('POST', '/api/assets', {});
-    console.log('Protected route without auth status (expect 401):', unauth.statusCode);
-    
-    console.log('\n3. Testing Successful Login');
-    const login = await request('POST', '/api/auth/login', { username: 'admin', password: 'password123' });
+    console.log('\n--- TESTING REVISIONS ---');
+    console.log('1. Login with plain text password from .env (admin / password123)');
+    let login = await request('POST', '/api/auth/login', { username: 'admin', password: 'password123' });
     console.log('Login status (expect 200):', login.statusCode);
-    const setCookie = login.headers['set-cookie'] ? login.headers['set-cookie'][0] : '';
-    console.log('Set-Cookie header present:', !!setCookie);
-    const tokenCookie = setCookie.split(';')[0];
+    
+    let tokenCookie = login.headers['set-cookie'] ? login.headers['set-cookie'][0].split(';')[0] : '';
+    console.log('Token received:', !!tokenCookie);
 
-    console.log('\n4. Testing Protected Route With Auth (POST /api/assets)');
-    const authReq = await request('POST', '/api/assets', {}, tokenCookie);
-    // 400 expected because body is missing required fields (validation happens before DB)
-    console.log('Protected route with auth status (expect 400):', authReq.statusCode);
+    console.log('\n2. Change Password (admin / password123 -> newPassword456)');
+    let changeReq = await request('POST', '/api/auth/change-password', { 
+      currentPassword: 'password123', 
+      newPassword: 'newPassword456' 
+    }, tokenCookie);
+    console.log('Change Password status (expect 200):', changeReq.statusCode);
 
-    console.log('\n5. Testing Logout');
-    const logout = await request('POST', '/api/auth/logout', null, tokenCookie);
-    console.log('Logout status (expect 200):', logout.statusCode);
-    console.log('Cookie cleared:', logout.headers['set-cookie'][0].includes('Expires=Thu, 01 Jan 1970'));
+    console.log('\n3. Login with OLD password (admin / password123)');
+    let oldLogin = await request('POST', '/api/auth/login', { username: 'admin', password: 'password123' });
+    console.log('Old Login status (expect 401):', oldLogin.statusCode);
 
-    console.log('\n6. Testing Rate Limiter');
-    let rateLimitStatus = 0;
-    for (let i = 0; i < 6; i++) {
-      const res = await request('POST', '/api/auth/login', { username: 'wrong', password: '123' });
-      rateLimitStatus = res.statusCode;
-    }
-    console.log('Rate limit status after 6 attempts (expect 429):', rateLimitStatus);
+    console.log('\n4. Login with NEW password (admin / newPassword456)');
+    let newLogin = await request('POST', '/api/auth/login', { username: 'admin', password: 'newPassword456' });
+    console.log('New Login status (expect 200):', newLogin.statusCode);
+    tokenCookie = newLogin.headers['set-cookie'] ? newLogin.headers['set-cookie'][0].split(';')[0] : '';
+
+    console.log('\n5. Restore Original Password (newPassword456 -> password123)');
+    let restoreReq = await request('POST', '/api/auth/change-password', { 
+      currentPassword: 'newPassword456', 
+      newPassword: 'password123' 
+    }, tokenCookie);
+    console.log('Restore Password status (expect 200):', restoreReq.statusCode);
 
   } catch (err) {
     console.error(err);

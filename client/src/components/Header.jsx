@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const Header = () => {
   return (
@@ -11,9 +12,9 @@ const Header = () => {
         <button className="text-text-muted hover:text-primary transition-colors duration-200">
           <span className="material-symbols-outlined" data-icon="download">download</span>
         </button>
-        <button className="font-label-mono text-label-mono text-primary font-bold border border-primary px-3 py-1 rounded-sm uppercase tracking-wider">
+        <Link to="/admin/login" className="font-label-mono text-label-mono text-primary font-bold border border-primary px-3 py-1 rounded-sm uppercase tracking-wider hover:bg-primary/10 transition-colors">
           Admin
-        </button>
+        </Link>
       </div>
     </header>
   );

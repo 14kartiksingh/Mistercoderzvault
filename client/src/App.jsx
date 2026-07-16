@@ -1,11 +1,15 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
 import SearchBar from './components/SearchBar';
 import DirectoriesGrid from './components/DirectoriesGrid';
 import NewUploads from './components/NewUploads';
 import Footer from './components/Footer';
+import AdminLogin from './pages/AdminLogin';
+import ChangePassword from './pages/ChangePassword';
+import AdminDashboard from './pages/AdminDashboard';
 
-function App() {
+function Home() {
   return (
     <>
       <Header />
@@ -18,6 +22,19 @@ function App() {
       </main>
       <Footer />
     </>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/change-password" element={<ChangePassword />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

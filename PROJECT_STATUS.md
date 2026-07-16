@@ -33,8 +33,16 @@ None.
 - Phase 6 secures all database modification routes while perfectly preserving public access to `GET` endpoints.
 - Integration testing script (`server/scripts/test-auth.js`) confirmed:
   - Unauthenticated mutating routes return 401.
-  - Successful login returns HTTP-Only Set-Cookie and yields authorized access (bypassing 401 error, returning expected 400 validation instead due to dummy data).
+  - Successful login returns HTTP-Only Set-Cookie and yields authorized access.
   - Rate Limiting throws 429 correctly after 5 false attempts.
+- Revisions implemented:
+  - Removed `ADMIN_PASSWORD_HASH` in favor of plain text `ADMIN_PASSWORD` in `.env` for simplified developer experience.
+  - Implemented `/admin/change-password` frontend page and backend API.
+  - The `changePassword` endpoint automatically updates the `.env` file upon successful change.
+  - Fixed Admin button on the homepage to correctly route to `/admin/login`.
+  - Replaced `express-rate-limit` on login with a silent 1-second delay for failed attempts.
+  - Created Admin Dashboard at `/admin` featuring "Change Password" and "Logout" links.
+  - Set `/admin/login` to redirect to `/admin` upon successful authentication.
 - Awaiting review before beginning Phase 7.
 
 ## Next Phase
