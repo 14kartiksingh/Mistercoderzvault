@@ -1,0 +1,312 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+
+function UploadMetadata() {
+  const [uploadState, setUploadState] = useState('idle'); // idle | uploading | complete
+  const [uploadId, setUploadId] = useState('');
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    category: 'Games'
+  });
+  const [tags, setTags] = useState([]);
+  const [tagInput, setTagInput] = useState('');
+  const [thumbnailPreview, setThumbnailPreview] = useState('');
+  const [error, setError] = useState('');
+  const pollingInterval = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollingInterval.current) clearInterval(pollingInterval.current);
+    };
+  }, []);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleThumbnailChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setThumbnailPreview(url);
+    }
+  };
+
+  const handleTagKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = tagInput.trim();
+      if (val && !tags.includes(val)) {
+        setTags([...tags, val]);
+      }
+      setTagInput('');
+    }
+  };
+
+  const removeTag = (indexToRemove) => {
+    setTags(tags.filter((_, i) => i !== indexToRemove));
+  };
+
+  const handleContinue = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!formData.title.trim()) {
+      setError('Title is required to continue.');
+      return;
+    }
+
+    try {
+      const newUploadId = 'upload_' + Math.random().toString(36).substr(2, 9);
+      setUploadId(newUploadId);
+
+      const res = await fetch('/api/telegram/upload-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          uploadId: newUploadId,
+          metadata: {
+            ...formData,
+            tags,
+            thumbnail: thumbnailPreview
+          }
+        })
+      });
+      
+      if (!res.ok) throw new Error('Failed to start upload session');
+
+      setUploadState('uploading');
+
+      // Open Telegram
+      const botUrl = `https://t.me/${import.meta.env.VITE_TELEGRAM_BOT_USERNAME}`;
+      window.open(botUrl, '_blank', 'noopener,noreferrer');
+
+      // Start Polling
+      pollingInterval.current = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`/api/telegram/status/${newUploadId}`);
+          if (pollRes.ok) {
+            const data = await pollRes.json();
+            if (data.status === 'complete') {
+              clearInterval(pollingInterval.current);
+              setUploadState('complete');
+            }
+          }
+        } catch (err) {
+          console.error('Polling error', err);
+        }
+      }, 2000);
+      
+    } catch (err) {
+      setError('An error occurred starting the upload.');
+    }
+  };
+
+  const handleReset = () => {
+    setUploadState('idle');
+    setUploadId('');
+    setFormData({ title: '', description: '', category: 'Games' });
+    setTags([]);
+    setThumbnailPreview('');
+    setError('');
+  };
+
+  if (uploadState === 'complete') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-sans">
+        <div className="max-w-md w-full bg-surface-base border border-border-subtle rounded-2xl p-10 shadow-2xl flex flex-col items-center text-center">
+          <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mb-6 text-green-500">
+            <span className="material-symbols-outlined text-4xl" data-icon="check_circle">check_circle</span>
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight mb-3 text-text-high-contrast">Upload Complete</h1>
+          <p className="text-text-base mb-2">Your file has been successfully uploaded to Telegram.</p>
+          <div className="w-full bg-surface-container border border-border-subtle rounded-lg p-4 mb-8">
+            <p className="text-sm text-text-muted font-medium mb-1">Filename:</p>
+            <p className="font-semibold text-text-high-contrast truncate">{formData.title}</p>
+          </div>
+          <div className="flex flex-col w-full gap-3">
+            <button
+              onClick={handleReset}
+              className="w-full py-3.5 rounded-xl font-bold transition-all bg-primary text-background hover:bg-primary/90 shadow-lg hover:shadow-primary/25"
+            >
+              Upload Another
+            </button>
+            <Link
+              to="/admin"
+              className="w-full py-3.5 rounded-xl font-medium transition-colors bg-surface-elevated text-text-base hover:text-primary border border-border-subtle"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (uploadState === 'uploading') {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-sans">
+        <div className="max-w-md w-full bg-surface-base border border-border-subtle rounded-2xl p-10 shadow-2xl flex flex-col items-center text-center">
+          <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6 text-primary animate-pulse">
+            <span className="material-symbols-outlined text-4xl animate-bounce" data-icon="send">send</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight mb-3 text-text-high-contrast">Opening Telegram...</h1>
+          <p className="text-text-base mb-8 leading-relaxed">
+            Please upload your file using the Telegram Bot.<br/>
+            This page will automatically update once the upload is complete.
+          </p>
+          <div className="w-full h-1.5 bg-surface-elevated rounded-full overflow-hidden">
+            <div className="h-full bg-primary animate-[indeterminate_1.5s_infinite_linear] origin-left rounded-full w-full"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center py-10 px-4 font-sans">
+      <div className="w-full max-w-2xl bg-surface-base border border-border-subtle rounded-2xl shadow-xl p-8 sm:p-10">
+        
+        <div className="flex items-center justify-between mb-10 pb-4 border-b border-border-subtle">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-text-high-contrast mb-1">Upload File</h1>
+            <p className="text-text-muted text-sm font-medium">Prepare metadata before sending</p>
+          </div>
+          <Link to="/admin" className="p-2 rounded-full hover:bg-surface-elevated text-text-muted hover:text-primary transition-colors flex items-center justify-center">
+            <span className="material-symbols-outlined text-2xl" data-icon="close">close</span>
+          </Link>
+        </div>
+
+        <form onSubmit={handleContinue} className="space-y-7">
+          {error && (
+            <div className="bg-error/10 border border-error/20 text-error p-4 rounded-xl text-sm font-medium flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px]" data-icon="error">error</span>
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="block text-sm font-semibold text-text-high-contrast" htmlFor="title">
+              Title *
+            </label>
+            <input
+              id="title"
+              name="title"
+              type="text"
+              value={formData.title}
+              onChange={handleChange}
+              className="w-full px-4 py-3 bg-surface-container border border-border-subtle rounded-xl text-text-high-contrast focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-text-muted/50"
+              placeholder="e.g., Grand Theft Auto V"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-7">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-semibold text-text-high-contrast" htmlFor="category">
+                Category
+              </label>
+              <div className="relative">
+                <select
+                  id="category"
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-surface-container border border-border-subtle rounded-xl text-text-high-contrast appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                >
+                  <option>Games</option>
+                  <option>Movies</option>
+                  <option>Apps</option>
+                  <option>Software</option>
+                  <option>Books</option>
+                  <option>Music</option>
+                  <option>Other</option>
+                </select>
+                <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" data-icon="expand_more">expand_more</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-sm font-semibold text-text-high-contrast">
+                Thumbnail Image
+              </label>
+              <div className="relative w-full h-12 bg-surface-container border border-border-subtle rounded-xl hover:border-primary/50 transition-colors flex items-center px-4 cursor-pointer overflow-hidden group">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleThumbnailChange}
+                  className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
+                />
+                {thumbnailPreview ? (
+                  <div className="flex items-center gap-3 w-full">
+                    <img src={thumbnailPreview} alt="Preview" className="h-8 w-8 object-cover rounded-md" />
+                    <span className="text-sm text-text-base truncate">Image selected</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-text-muted group-hover:text-primary transition-colors">
+                    <span className="material-symbols-outlined text-[20px]" data-icon="image">image</span>
+                    <span className="text-sm font-medium">Choose image...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-sm font-semibold text-text-high-contrast" htmlFor="description">
+              Description
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              rows="3"
+              value={formData.description}
+              onChange={handleChange}
+              className="w-full px-4 py-3 bg-surface-container border border-border-subtle rounded-xl text-text-high-contrast focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none placeholder:text-text-muted/50"
+              placeholder="Enter a description..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-text-high-contrast" htmlFor="tagInput">
+              Tags
+            </label>
+            <div className="p-2 bg-surface-container border border-border-subtle rounded-xl flex flex-wrap gap-2 focus-within:ring-2 focus-within:ring-primary/50 transition-all min-h-[56px] items-center">
+              {tags.map((tag, idx) => (
+                <div key={idx} className="flex items-center gap-1.5 bg-surface-elevated border border-border-subtle px-3 py-1.5 rounded-full text-sm text-text-high-contrast group">
+                  <span>{tag}</span>
+                  <button type="button" onClick={() => removeTag(idx)} className="text-text-muted hover:text-error transition-colors flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[16px]" data-icon="close">close</span>
+                  </button>
+                </div>
+              ))}
+              <input
+                id="tagInput"
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+                className="flex-1 min-w-[120px] bg-transparent outline-none text-text-high-contrast text-sm px-2 py-1 placeholder:text-text-muted/50"
+                placeholder={tags.length === 0 ? "Type and press Enter..." : ""}
+              />
+            </div>
+          </div>
+
+          <div className="pt-8">
+            <button
+              type="submit"
+              className="w-full bg-primary text-background font-bold py-4 rounded-xl hover:bg-primary/90 focus:outline-none focus:ring-4 focus:ring-primary/20 transition-all text-lg shadow-lg hover:shadow-primary/25 flex items-center justify-center gap-2"
+            >
+              <span>Continue Upload</span>
+              <span className="material-symbols-outlined text-[20px]" data-icon="arrow_forward">arrow_forward</span>
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  );
+}
+
+export default UploadMetadata;

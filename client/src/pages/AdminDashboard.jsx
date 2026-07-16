@@ -14,30 +14,49 @@ function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-text-high-contrast flex flex-col">
-      <header className="border-b border-border-subtle bg-surface-base px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-0">
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary" data-icon="lock">lock</span>
-          <h1 className="font-bold tracking-tight text-lg">Admin Dashboard</h1>
+    <div className="min-h-screen bg-background text-text-high-contrast flex flex-col items-center justify-center p-6 text-center font-sans">
+      <div className="max-w-md w-full bg-surface-base border border-border-subtle rounded-2xl p-10 shadow-2xl flex flex-col gap-8 items-center backdrop-blur-md">
+        <div className="flex flex-col items-center">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary">
+            <span className="material-symbols-outlined text-3xl" data-icon="shield_person">shield_person</span>
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight mb-2">Welcome, Admin</h1>
+          <p className="text-text-muted text-sm font-medium">MISTER CODERZ Vault</p>
         </div>
-        <nav className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-center sm:justify-end">
-          <Link to="/admin/change-password" className="text-sm font-medium text-text-muted hover:text-primary transition-colors">
-            Change Password
-          </Link>
-          <button 
-            onClick={handleLogout}
-            className="text-sm text-text-muted hover:text-primary transition-colors"
+        
+        <div className="flex flex-col w-full gap-3 mt-2">
+          <Link 
+            to="/admin/upload"
+            className="w-full py-3.5 rounded-xl font-bold transition-all bg-primary text-background hover:bg-primary/90 shadow-lg hover:shadow-primary/25 flex justify-center items-center gap-2"
           >
-            Logout
+            <span className="material-symbols-outlined text-[20px]" data-icon="cloud_upload">cloud_upload</span>
+            Upload New File
+          </Link>
+          
+          <button 
+            disabled
+            className="w-full py-3 rounded-xl font-medium transition-all bg-surface-container text-text-muted border border-border-subtle cursor-not-allowed flex justify-center items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[18px]" data-icon="history">history</span>
+            Recent Uploads (Coming Soon)
           </button>
-        </nav>
-      </header>
-      <main className="p-4 sm:p-8 flex-1 w-full max-w-7xl mx-auto">
-        <div className="bg-surface-container border border-border-subtle rounded-xl p-6 sm:p-8 text-center">
-          <h2 className="text-lg sm:text-xl font-bold mb-2">Welcome to the Vault Admin</h2>
-          <p className="text-sm sm:text-base text-text-muted">More administrative features will be added here soon.</p>
+          
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <Link 
+              to="/admin/change-password" 
+              className="w-full py-2.5 rounded-xl font-medium transition-colors bg-surface-elevated text-text-base hover:text-primary border border-border-subtle flex justify-center items-center text-sm"
+            >
+              Change Password
+            </Link>
+            <button 
+              onClick={handleLogout}
+              className="w-full py-2.5 rounded-xl font-medium transition-colors bg-surface-elevated text-error hover:bg-error/10 border border-border-subtle flex justify-center items-center text-sm"
+            >
+              Logout
+            </button>
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

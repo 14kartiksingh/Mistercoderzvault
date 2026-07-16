@@ -43,7 +43,14 @@ None.
   - Replaced `express-rate-limit` on login with a silent 1-second delay for failed attempts.
   - Created Admin Dashboard at `/admin` featuring "Change Password" and "Logout" links.
   - Set `/admin/login` to redirect to `/admin` upon successful authentication.
-- Awaiting review before beginning Phase 7.
+- Phase 7 Details:
+  - Implemented nested routing for `/admin` sub-pages (`/assets`, `/assets/new`, `/assets/edit/:id`).
+  - Built `DashboardHome` with real-time stats and recent assets.
+  - Built `AssetList` featuring a responsive table (cards on mobile) with Edit/Delete buttons.
+  - Built `AssetForm` for creating and editing assets directly hitting the `/api/assets` endpoints.
+  - Migrated backend from Soft Delete to Hard Delete (`prisma.asset.delete`) as per QA requirements.
+  - Implemented `DeleteConfirmModal` for safe deletions.
+- Awaiting review before beginning Phase 8.
 
 ## Next Phase
-Phase 7 - TBD
+Phase 8 - TBD

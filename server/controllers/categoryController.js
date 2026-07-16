@@ -8,6 +8,11 @@ const { sendSuccess, sendError } = require('../utils/response');
 const getCategories = async (req, res) => {
   try {
     const categories = await prisma.category.findMany({
+      include: {
+        _count: {
+          select: { assets: { where: { isDeleted: false } } }
+        }
+      },
       orderBy: { name: 'asc' },
     });
     return sendSuccess(res, categories);

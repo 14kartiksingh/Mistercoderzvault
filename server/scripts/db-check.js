@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../.env' }); // Load root .env
+require('dotenv').config({ path: '../.env', override: true }); // Load root .env
 const { PrismaClient } = require('@prisma/client');
 
 async function checkDatabase() {

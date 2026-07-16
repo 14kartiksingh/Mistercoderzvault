@@ -6,8 +6,15 @@ const { sendSuccess, sendError } = require('../utils/response');
  */
 const getAssets = async (req, res) => {
   try {
+    const { categorySlug } = req.query;
+    const whereClause = { isDeleted: false };
+    
+    if (categorySlug) {
+      whereClause.category = { slug: categorySlug };
+    }
+
     const assets = await prisma.asset.findMany({
-      where: { isDeleted: false },
+      where: whereClause,
       include: {
         category: true,
         tags: true,
@@ -27,15 +34,15 @@ const getAssets = async (req, res) => {
 const getAssetById = async (req, res) => {
   try {
     const { id } = req.params;
-    const asset = await prisma.asset.findFirst({
-      where: { id, isDeleted: false },
+    const asset = await prisma.asset.findUnique({
+      where: { id },
       include: {
         category: true,
         tags: true,
       },
     });
 
-    if (!asset) {
+    if (!asset || asset.isDeleted) {
       return sendError(res, 'Asset not found', 404);
     }
 
@@ -113,6 +120,7 @@ const updateAsset = async (req, res) => {
     const {
       name,
       categoryId,
+      categoryName,
       tags,
       fileType,
       sizeBytes,
@@ -122,16 +130,26 @@ const updateAsset = async (req, res) => {
       metadata,
     } = req.body;
 
-    // Ensure asset exists and is active
-    const existing = await prisma.asset.findFirst({ where: { id, isDeleted: false } });
-    if (!existing) {
+    // Ensure asset exists
+    const existing = await prisma.asset.findUnique({ where: { id } });
+    if (!existing || existing.isDeleted) {
       return sendError(res, 'Asset not found', 404);
     }
 
     // Build update data
     const data = {};
     if (name !== undefined) data.name = name;
-    if (categoryId !== undefined) data.categoryId = categoryId;
+    
+    if (categoryName !== undefined) {
+      const categorySlug = categoryName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      let category = await prisma.category.findUnique({ where: { slug: categorySlug } });
+      if (!category) {
+        category = await prisma.category.create({ data: { name: categoryName, slug: categorySlug } });
+      }
+      data.categoryId = category.id;
+    } else if (categoryId !== undefined) {
+      data.categoryId = categoryId;
+    }
     if (fileType !== undefined) data.fileType = fileType;
     if (sizeBytes !== undefined) data.sizeBytes = BigInt(sizeBytes);
     if (description !== undefined) data.description = description;
@@ -176,14 +194,13 @@ const deleteAsset = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const existing = await prisma.asset.findFirst({ where: { id, isDeleted: false } });
-    if (!existing) {
+    const existing = await prisma.asset.findUnique({ where: { id } });
+    if (!existing || existing.isDeleted) {
       return sendError(res, 'Asset not found', 404);
     }
 
-    await prisma.asset.update({
+    await prisma.asset.delete({
       where: { id },
-      data: { isDeleted: true },
     });
 
     return sendSuccess(res, { message: 'Asset successfully deleted' });

@@ -2,12 +2,17 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
-const routes = require('./routes');
 
-// Load environment variables
+// Load environment variables FIRST
 dotenv.config({ path: '../.env' });
 
+const routes = require('./routes');
+
 const app = express();
+const { initBot } = require('./utils/telegramBot');
+
+// Initialize Telegram Bot
+initBot();
 
 // Middleware
 app.use(cors());
