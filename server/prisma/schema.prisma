@@ -32,11 +32,11 @@ model Asset {
   tags         Tag[]    // Implicit many-to-many relation
   fileType     String
   sizeBytes    BigInt
-  version      String?
   description  String?
   thumbnailUrl String?
   visibility   String   @default("PRIVATE") // string enum
   metadata     Json?
+  isDeleted    Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

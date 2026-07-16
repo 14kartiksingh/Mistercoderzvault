@@ -1,21 +1,26 @@
 # MISTER CODERZ Vault Project Status
 
 ## Current Phase
-Phase 4 - Database Foundation
+Phase 5 - Asset Metadata Management
 
 ## Current Task
-Completed Phase 4 implementation. Ready for review.
+Completed Phase 5 API implementation. Ready for review.
 
 ## Completed
 - [x] Phase 0 - Foundation Setup
 - [x] Phase 1 - Backend Architecture
 - [x] Phase 2 - Domain Modeling
 - [x] Phase 3 - Functional Specification
-- [x] Installed and configured Prisma ORM with PostgreSQL.
-- [x] Created `schema.prisma` matching the 1-to-1 Asset-to-File Domain Model.
-- [x] Configured a singleton Prisma Client in `server/config/db.js`.
-- [x] Added `npm run db:check` script to verify database connectivity.
-- [x] Updated `.env.example` with standard connection string.
+- [x] Phase 4 - Database Foundation
+- [x] Removed `version` from `Asset` schema.
+- [x] Added `isDeleted` to `Asset` schema to support soft deletes.
+- [x] Generated Prisma Client.
+- [x] Developed API response formatter with dedicated BigInt serialization helper.
+- [x] Implemented `GET /api/categories` endpoint.
+- [x] Implemented Asset CRUD operations (`GET`, `POST`, `PUT`, `DELETE`).
+- [x] Ensured `DELETE /api/assets/:id` performs a soft delete.
+- [x] Ensured standard `GET /api/assets` endpoints filter out deleted assets.
+- [x] Registered routes in `server/routes/index.js`.
 
 ## In Progress
 None.
@@ -27,9 +32,10 @@ None for this phase.
 None.
 
 ## Notes
-- Phase 4 focused on laying the database foundation. No CRUD APIs or external integrations have been implemented yet.
-- The `npm run db:check` command correctly validates connection parameters using a dummy connection, resulting in an expected failure until a real PostgreSQL instance is supplied locally.
-- Awaiting review before beginning Phase 5.
+- Phase 5 focused on building the metadata management layer, allowing the future Upload Pipeline to strictly focus on binary handling.
+- The `isDeleted` soft-delete pattern successfully safeguards historical data.
+- The dedicated `serializeBigInt` logic securely formats `BigInt` properties for JSON responses without mutating global JS prototypes.
+- Awaiting review before beginning Phase 6.
 
 ## Next Phase
-Phase 5 - TBD
+Phase 6 - TBD
