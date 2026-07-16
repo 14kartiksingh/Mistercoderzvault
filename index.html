@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MISTER CODERZ Vault</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "outline-variant": "#5a4136",
+            "on-primary-fixed-variant": "#7a3000",
+            "on-tertiary-fixed": "#001d35",
+            "surface-variant": "#353534",
+            "error-container": "#93000a",
+            "on-primary-container": "#572000",
+            "on-tertiary-container": "#003357",
+            "on-background": "#e5e2e1",
+            "surface-container-high": "#2a2a2a",
+            "surface-elevated": "#141414",
+            "surface-dim": "#131313",
+            "surface-tint": "#ffb693",
+            "secondary-fixed": "#ffe170",
+            "on-secondary-fixed": "#221b00",
+            "error": "#ffb4ab",
+            "primary-fixed-dim": "#ffb693",
+            "surface-container-low": "#1c1b1b",
+            "on-secondary-container": "#6f5c00",
+            "secondary": "#fff3d2",
+            "surface-base": "#0A0A0A",
+            "tertiary-fixed": "#d0e4ff",
+            "text-high-contrast": "#FFFFFF",
+            "surface-bright": "#3a3939",
+            "surface": "#131313",
+            "surface-container": "#201f1f",
+            "on-surface-variant": "#e2bfb0",
+            "tertiary": "#9ccaff",
+            "on-error": "#690005",
+            "on-primary": "#561f00",
+            "on-error-container": "#ffdad6",
+            "text-muted": "#A1A1AA",
+            "surface-container-highest": "#353534",
+            "surface-container-lowest": "#0e0e0e",
+            "on-primary-fixed": "#351000",
+            "tertiary-fixed-dim": "#9ccaff",
+            "outline": "#a98a7d",
+            "secondary-fixed-dim": "#e9c400",
+            "background": "#000000", /* Overridden to True Black as requested */
+            "on-surface": "#e5e2e1",
+            "on-secondary": "#3a3000",
+            "inverse-on-surface": "#313030",
+            "secondary-container": "#fdd400",
+            "on-tertiary-fixed-variant": "#00497b",
+            "border-subtle": "#262626",
+            "primary": "#FF6B00", /* Overridden to Orange as requested */
+            "primary-fixed": "#ffdbcc",
+            "on-secondary-fixed-variant": "#544600",
+            "on-tertiary": "#003257",
+            "inverse-surface": "#e5e2e1",
+            "inverse-primary": "#a04100",
+            "tertiary-container": "#059eff",
+            "primary-container": "#FF6B00"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "base": "8px",
+            "section-gap": "48px",
+            "margin-mobile": "16px",
+            "gutter": "24px",
+            "container-max": "1280px"
+          },
+          "fontFamily": {
+            "body-sm": ["Inter"],
+            "body-md": ["Inter"],
+            "label-mono": ["JetBrains Mono"],
+            "display-xl-mobile": ["Inter"],
+            "display-xl": ["Inter"],
+            "headline-sm": ["Inter"],
+            "headline-lg": ["Inter"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      font-size: 20px;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .custom-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    body {
+      background-color: #000000;
+      color: #FFFFFF;
+      -webkit-font-smoothing: antialiased;
+    }
+    .glass-nav {
+      background: rgba(10, 10, 10, 0.8);
+      backdrop-filter: blur(12px);
+    }
+    input:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(255, 107, 0, 0.2);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-body-md overflow-x-hidden">
+<!-- TopAppBar Section -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-mobile md:px-gutter h-16 bg-surface-base border-b border-border-subtle glass-nav">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="lock">lock</span>
+<h1 class="font-headline-sm text-headline-sm font-bold text-text-high-contrast tracking-tight">MISTER CODERZ Vault</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-text-muted hover:text-primary transition-colors duration-200">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</button>
+<button class="font-label-mono text-label-mono text-primary font-bold border border-primary px-3 py-1 rounded-sm uppercase tracking-wider">
+        Admin
+      </button>
+</div>
+</header>
+<main class="mt-16 pb-24">
+<!-- Hero & Search Section -->
+<section class="px-margin-mobile pt-8 pb-6 flex flex-col gap-6">
+<div class="relative group">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-text-muted group-focus-within:text-primary" data-icon="search">search</span>
+</div>
+<input class="w-full bg-surface-elevated border border-border-subtle pl-12 pr-4 py-4 rounded-sm text-body-md font-body-md placeholder:text-text-muted focus:border-primary transition-all duration-200" placeholder="Search your vault (e.g., 'Ubuntu ISO', 'Cyberpunk')..." type="text"/>
+</div>
+<!-- Storage Summary -->
+<div class="bg-surface-elevated border border-border-subtle p-3 flex flex-col gap-2">
+<div class="flex justify-between items-center font-label-mono text-label-mono text-text-muted">
+<span>SYSTEM_CAPACITY</span>
+<span class="text-text-high-contrast">3.4 TB / 10 TB USED</span>
+</div>
+<div class="w-full h-1 bg-border-subtle overflow-hidden">
+<div class="h-full bg-primary w-[34%]"></div>
+</div>
+</div>
+</section>
+<!-- Quick Categories Grid -->
+<section class="px-margin-mobile mb-section-gap">
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-headline-sm text-headline-sm text-text-high-contrast uppercase tracking-tighter">Directories</h2>
+<span class="font-label-mono text-label-mono text-text-muted">ROOT/VOL_01</span>
+</div>
+<div class="grid grid-cols-2 gap-2">
+<!-- Categories Loop -->
+<div class="bg-surface-elevated border border-border-subtle p-4 flex flex-col gap-2 hover:border-primary transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-primary" data-icon="sports_esports">sports_esports</span>
+<div>
+<div class="font-body-md font-bold text-text-high-contrast">Games</div>
+<div class="font-label-mono text-label-mono text-text-muted group-hover:text-primary transition-colors">142 FILES</div>
+</div>
+</div>
+<div class="bg-surface-elevated border border-border-subtle p-4 flex flex-col gap-2 hover:border-primary transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-primary" data-icon="movie">movie</span>
+<div>
+<div class="font-body-md font-bold text-text-high-contrast">Movies</div>
+<div class="font-label-mono text-label-mono text-text-muted group-hover:text-primary transition-colors">856 FILES</div>
+</div>
+</div>
+<div class="bg-surface-elevated border border-border-subtle p-4 flex flex-col gap-2 hover:border-primary transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-primary" data-icon="developer_mode_tv">developer_mode_tv</span>
+<div>
+<div class="font-body-md font-bold text-text-high-contrast">Apps</div>
+<div class="font-label-mono text-label-mono text-text-muted group-hover:text-primary transition-colors">211 FILES</div>
+</div>
+</div>
+<div class="bg-surface-elevated border border-border-subtle p-4 flex flex-col gap-2 hover:border-primary transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-primary" data-icon="terminal">terminal</span>
+<div>
+<div class="font-body-md font-bold text-text-high-contrast">Software</div>
+<div class="font-label-mono text-label-mono text-text-muted group-hover:text-primary transition-colors">64 FILES</div>
+</div>
+</div>
+<div class="bg-surface-elevated border border-border-subtle p-4 flex flex-col gap-2 hover:border-primary transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-primary" data-icon="book">book</span>
+<div>
+<div class="font-body-md font-bold text-text-high-contrast">Books</div>
+<div class="font-label-mono text-label-mono text-text-muted group-hover:text-primary transition-colors">1,204 FILES</div>
+</div>
+</div>
+<div class="bg-surface-elevated border border-border-subtle p-4 flex flex-col gap-2 hover:border-primary transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-primary" data-icon="album">album</span>
+<div>
+<div class="font-body-md font-bold text-text-high-contrast">Music</div>
+<div class="font-label-mono text-label-mono text-text-muted group-hover:text-primary transition-colors">4,310 FILES</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Featured Files Horizontal Scroll -->
+<section class="mb-section-gap">
+<div class="px-margin-mobile flex items-center justify-between mb-4">
+<h2 class="font-headline-sm text-headline-sm text-text-high-contrast uppercase tracking-tighter">Pinned_Assets</h2>
+<span class="material-symbols-outlined text-primary" data-icon="push_pin">push_pin</span>
+</div>
+<div class="flex gap-4 overflow-x-auto px-margin-mobile custom-scrollbar">
+<!-- Featured Card 1 -->
+<div class="min-w-[200px] bg-surface-elevated border border-border-subtle p-3 flex flex-col gap-3 group relative">
+<div class="aspect-square bg-surface border border-border-subtle relative overflow-hidden">
+<div class="absolute inset-0 w-full h-full bg-cover bg-center" data-alt="A futuristic dark sci-fi game cover art featuring a cyborg silhouette against an orange neon background. The style is hyper-detailed, technical, and clean with a 1px border aesthetic and high contrast orange and black color palette." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBBtCTaPDOQxe6URtjZjniIfpCc86CUkNKYAdDJjCYDk6ibV-O-yRH4_2dn5upaMQgJiVWRqQcDU06fR2ghRd3WMCeOrGX8iDCuUMNcvkDpkFsWBz3V44NPXT1GFuAai4k033zXe9ACSJva6IWc5s1f7QYDfodCeNXMkP2Y3IzdgU9bYHk2GEyZqUYT78jkLwGNDDQBBcJ6-0fV5VrJ4sXFmY0_9TpqjgPVxzUdkV5UBOGQQnk_ETuJnKwGEm9abV5QW2Lq-6Fg_IGk')"></div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-label-mono text-label-mono text-primary">GAME</span>
+<h3 class="font-body-md font-bold text-text-high-contrast truncate">Cyberpunk 2077</h3>
+<div class="font-label-mono text-label-mono text-text-muted">72.4 GB</div>
+</div>
+<button class="bg-primary text-text-high-contrast w-full py-2 flex justify-center items-center rounded-sm hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</button>
+</div>
+<!-- Featured Card 2 -->
+<div class="min-w-[200px] bg-surface-elevated border border-border-subtle p-3 flex flex-col gap-3 group relative">
+<div class="aspect-square bg-surface border border-border-subtle relative overflow-hidden">
+<div class="absolute inset-0 w-full h-full bg-cover bg-center" data-alt="A professional 3D design software splash screen showing complex geometric wireframes and a clean minimal UI. The lighting is cold and clinical with bright orange highlights, creating a premium technical studio aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuArQdijM6BnkAhTeZKSKZ06u1QH4tMWC_fPOfl_w6ivfI7ZwAvgPaRSAHFdwYPIiRU8IQ9zbsR2RYPn42TIJu8pCL7Y2jv4k9i1G9ZLa_P14mfZQ7xJE0lVgi73WqFu04KD70nSVMryT38lIdtHGNaYkrikkbiWHO64A6dlj-vaq-U13m41rWBwptMP7cDAt-q9PdIaZisq3oSUs7NkfkGLE7PrJzTlrXrM8c7QMr_a-OlDnMDRr4P6xikmTQZBDUrRLr2hLLrD9wWo')"></div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-label-mono text-label-mono text-primary">SOFTWARE</span>
+<h3 class="font-body-md font-bold text-text-high-contrast truncate">Blender 4.2 Pro</h3>
+<div class="font-label-mono text-label-mono text-text-muted">1.2 GB</div>
+</div>
+<button class="bg-primary text-text-high-contrast w-full py-2 flex justify-center items-center rounded-sm hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</button>
+</div>
+<!-- Featured Card 3 -->
+<div class="min-w-[200px] bg-surface-elevated border border-border-subtle p-3 flex flex-col gap-3 group relative">
+<div class="aspect-square bg-surface border border-border-subtle relative overflow-hidden">
+<div class="absolute inset-0 w-full h-full bg-cover bg-center" data-alt="A stylized operating system installation disc art for a technical linux distribution. The design uses minimalist orange typography and circuit-like patterns on a deep black background, reflecting a sophisticated developer environment." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC3DG5N9PtPD-4m2duO439U6U434neM3zF-TfLESQnrVsfcXApg9Cf9ufLl-_IdH3Z1dTTn9AmF1a6YQgVFbpfmZxw-8DZdUY57HJXZOxhGr3omZ_4KJhCsWS5slNWnP19Q9MiBdSlYygaefW0v5slVJWjDqOt6pyR9deZ91AODENbUINuCAl2WsJAYfv3aqqve3Vv2i9pwC05MJrjqYFwiuXaKnSKLksXcJbNtnDP186ZTUI5G7WKjUbtBTO5e16aBgH65jFdVD4Uu')"></div>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-label-mono text-label-mono text-primary">ISO</span>
+<h3 class="font-body-md font-bold text-text-high-contrast truncate">Arch_Linux_LTS</h3>
+<div class="font-label-mono text-label-mono text-text-muted">4.8 GB</div>
+</div>
+<button class="bg-primary text-text-high-contrast w-full py-2 flex justify-center items-center rounded-sm hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Recently Added List -->
+<section class="px-margin-mobile">
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-headline-sm text-headline-sm text-text-high-contrast uppercase tracking-tighter">Journal_Entries</h2>
+<span class="font-label-mono text-label-mono text-text-muted">LAST_24H</span>
+</div>
+<div class="flex flex-col gap-px bg-border-subtle border border-border-subtle">
+<!-- Row 1 -->
+<div class="bg-surface-elevated flex items-center justify-between p-4 hover:bg-surface transition-colors cursor-pointer">
+<div class="flex items-center gap-4 min-w-0">
+<div class="w-10 h-10 bg-surface flex items-center justify-center border border-border-subtle shrink-0">
+<span class="material-symbols-outlined text-primary" data-icon="description">description</span>
+</div>
+<div class="min-w-0">
+<h4 class="font-body-md font-semibold text-text-high-contrast truncate">Architectural_Brief_v3</h4>
+<div class="flex gap-2 items-center">
+<span class="font-label-mono text-[10px] text-primary bg-primary/10 px-1">DOCS</span>
+<span class="font-label-mono text-label-mono text-text-muted">14.2 MB</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0 pl-2">
+<span class="font-label-mono text-label-mono text-text-muted">2H_AGO</span>
+<button class="text-primary mt-1">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</button>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="bg-surface-elevated flex items-center justify-between p-4 hover:bg-surface transition-colors cursor-pointer">
+<div class="flex items-center gap-4 min-w-0">
+<div class="w-10 h-10 bg-surface flex items-center justify-center border border-border-subtle shrink-0">
+<span class="material-symbols-outlined text-primary" data-icon="inventory_2">inventory_2</span>
+</div>
+<div class="min-w-0">
+<h4 class="font-body-md font-semibold text-text-high-contrast truncate">Project_Nebula_Source</h4>
+<div class="flex gap-2 items-center">
+<span class="font-label-mono text-[10px] text-primary bg-primary/10 px-1">APPS</span>
+<span class="font-label-mono text-label-mono text-text-muted">450.8 MB</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0 pl-2">
+<span class="font-label-mono text-label-mono text-text-muted">5H_AGO</span>
+<button class="text-primary mt-1">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</button>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="bg-surface-elevated flex items-center justify-between p-4 hover:bg-surface transition-colors cursor-pointer">
+<div class="flex items-center gap-4 min-w-0">
+<div class="w-10 h-10 bg-surface flex items-center justify-center border border-border-subtle shrink-0">
+<span class="material-symbols-outlined text-primary" data-icon="audio_file">audio_file</span>
+</div>
+<div class="min-w-0">
+<h4 class="font-body-md font-semibold text-text-high-contrast truncate">Studio_Session_FLAC</h4>
+<div class="flex gap-2 items-center">
+<span class="font-label-mono text-[10px] text-primary bg-primary/10 px-1">MUSIC</span>
+<span class="font-label-mono text-label-mono text-text-muted">84.2 MB</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0 pl-2">
+<span class="font-label-mono text-label-mono text-text-muted">12H_AGO</span>
+<button class="text-primary mt-1">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer Section -->
+<footer class="w-full py-base px-margin-mobile md:px-gutter flex flex-wrap justify-between items-center gap-4 bg-surface-base border-t border-border-subtle fixed bottom-0">
+<div class="font-label-mono text-label-mono text-text-high-contrast">
+      MCV_SYSTEM_ONLINE
+    </div>
+<div class="flex gap-4">
+<a class="font-label-mono text-label-mono text-text-muted hover:text-primary transition-colors" href="#">GITHUB</a>
+<a class="font-label-mono text-label-mono text-text-muted hover:text-primary transition-colors" href="#">V1.0.0-PROD</a>
+</div>
+<div class="w-full text-center md:w-auto font-label-mono text-[10px] text-text-muted uppercase">
+      © 2024 MISTER CODERZ
+    </div>
+</footer>
+<script>
+    // Lightweight atmospheric effect: terminal typing simulator in placeholder or title
+    const searchInput = document.querySelector('input[type="text"]');
+    const placeholders = [
+      "Search your vault...",
+      "Looking for 'Ubuntu ISO'?",
+      "Query: 'Cyberpunk 2077'",
+      "Searching directories...",
+      "Type 'help' for command list"
+    ];
+    let placeholderIndex = 0;
+    
+    setInterval(() => {
+      placeholderIndex = (placeholderIndex + 1) % placeholders.length;
+      searchInput.setAttribute('placeholder', placeholders[placeholderIndex]);
+    }, 4000);
+
+    // Micro-interaction for cards
+    document.querySelectorAll('.bg-surface-elevated').forEach(card => {
+      card.addEventListener('touchstart', () => {
+        card.classList.add('border-primary');
+      });
+      card.addEventListener('touchend', () => {
+        setTimeout(() => {
+          card.classList.remove('border-primary');
+        }, 300);
+      });
+    });
+  </script>
+</body></html>
