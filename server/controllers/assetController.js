@@ -7,7 +7,7 @@ const { sendSuccess, sendError } = require('../utils/response');
 const getAssets = async (req, res) => {
   try {
     const { categorySlug } = req.query;
-    const whereClause = { isDeleted: false };
+    const whereClause = { isDeleted: false, isPending: false };
     
     if (categorySlug) {
       whereClause.category = { slug: categorySlug };
@@ -18,6 +18,7 @@ const getAssets = async (req, res) => {
       include: {
         category: true,
         tags: true,
+        files: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -39,6 +40,7 @@ const getAssetById = async (req, res) => {
       include: {
         category: true,
         tags: true,
+        files: true,
       },
     });
 
@@ -62,7 +64,7 @@ const createAsset = async (req, res) => {
       name,
       categoryId,
       tags,
-      fileType,
+      contentType,
       sizeBytes,
       description,
       thumbnailUrl,
@@ -71,8 +73,8 @@ const createAsset = async (req, res) => {
     } = req.body;
 
     // Basic validation
-    if (!name || !categoryId || !fileType || sizeBytes === undefined) {
-      return sendError(res, 'Missing required fields: name, categoryId, fileType, sizeBytes');
+    if (!name || !categoryId || !contentType || sizeBytes === undefined) {
+      return sendError(res, 'Missing required fields: name, categoryId, contentType, sizeBytes');
     }
 
     // Prepare tags for Prisma connectOrCreate
@@ -88,12 +90,13 @@ const createAsset = async (req, res) => {
       data: {
         name,
         categoryId,
-        fileType,
+        contentType,
         sizeBytes: BigInt(sizeBytes),
         description,
         thumbnailUrl,
         visibility: visibility || 'PRIVATE',
         metadata: metadata || {},
+        isPending: false, // Created manually/via API directly
         tags: {
           connectOrCreate: tagConnectOrCreate,
         },
@@ -101,6 +104,7 @@ const createAsset = async (req, res) => {
       include: {
         category: true,
         tags: true,
+        files: true,
       },
     });
 
@@ -122,7 +126,7 @@ const updateAsset = async (req, res) => {
       categoryId,
       categoryName,
       tags,
-      fileType,
+      contentType,
       sizeBytes,
       description,
       thumbnailUrl,
@@ -150,7 +154,7 @@ const updateAsset = async (req, res) => {
     } else if (categoryId !== undefined) {
       data.categoryId = categoryId;
     }
-    if (fileType !== undefined) data.fileType = fileType;
+    if (contentType !== undefined) data.contentType = contentType;
     if (sizeBytes !== undefined) data.sizeBytes = BigInt(sizeBytes);
     if (description !== undefined) data.description = description;
     if (thumbnailUrl !== undefined) data.thumbnailUrl = thumbnailUrl;
@@ -177,6 +181,7 @@ const updateAsset = async (req, res) => {
       include: {
         category: true,
         tags: true,
+        files: true,
       },
     });
 
@@ -199,8 +204,11 @@ const deleteAsset = async (req, res) => {
       return sendError(res, 'Asset not found', 404);
     }
 
-    await prisma.asset.delete({
+    // We do a hard delete or update isDeleted flag
+    // Let's keep the soft delete pattern by setting isDeleted to true
+    await prisma.asset.update({
       where: { id },
+      data: { isDeleted: true },
     });
 
     return sendSuccess(res, { message: 'Asset successfully deleted' });
@@ -210,10 +218,95 @@ const deleteAsset = async (req, res) => {
   }
 };
 
+/**
+ * Download asset endpoint (future-friendly asset-level download)
+ */
+const downloadAsset = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const asset = await prisma.asset.findUnique({
+      where: { id },
+      include: { files: true }
+    });
+
+    if (!asset || asset.isDeleted || asset.isPending) {
+      return sendError(res, 'Asset not found', 404);
+    }
+
+    if (asset.files.length === 0) {
+      return sendError(res, 'No files associated with this asset', 404);
+    }
+
+    const channelId = process.env.TELEGRAM_STORAGE_CHANNEL_ID;
+    if (!channelId) {
+      return sendError(res, 'Storage channel is not configured on the backend', 500);
+    }
+
+    const cleanChannelId = channelId.startsWith('-100') ? channelId.slice(4) : channelId;
+
+    if (asset.uploadType === 'SINGLE') {
+      const file = asset.files[0];
+      if (!file.telegramMessageId) {
+        return sendError(res, 'Telegram message not found for this file', 404);
+      }
+      return res.redirect(`https://t.me/c/${cleanChannelId}/${file.telegramMessageId}`);
+    } else {
+      // For MULTIPART/FOLDER, return the files list with their download links
+      const filesWithLinks = asset.files.map(f => ({
+        id: f.id,
+        fileName: f.fileName,
+        fileSize: f.fileSize.toString(),
+        partNumber: f.partNumber,
+        relativePath: f.relativePath,
+        downloadUrl: `https://t.me/c/${cleanChannelId}/${f.telegramMessageId}`
+      }));
+      return sendSuccess(res, {
+        assetId: asset.id,
+        name: asset.name,
+        uploadType: asset.uploadType,
+        files: filesWithLinks
+      });
+    }
+  } catch (error) {
+    console.error('Error in downloadAsset:', error);
+    return sendError(res, 'Failed to download asset', 500);
+  }
+};
+
+/**
+ * Download file-level endpoint
+ */
+const downloadFile = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const assetFile = await prisma.assetFile.findUnique({
+      where: { id: fileId }
+    });
+
+    if (!assetFile || !assetFile.telegramMessageId) {
+      return sendError(res, 'File not found or not yet uploaded', 404);
+    }
+
+    const channelId = process.env.TELEGRAM_STORAGE_CHANNEL_ID;
+    if (!channelId) {
+      return sendError(res, 'Storage channel is not configured on the backend', 500);
+    }
+
+    const cleanChannelId = channelId.startsWith('-100') ? channelId.slice(4) : channelId;
+    const redirectUrl = `https://t.me/c/${cleanChannelId}/${assetFile.telegramMessageId}`;
+    return res.redirect(redirectUrl);
+  } catch (error) {
+    console.error('Error in downloadFile:', error);
+    return sendError(res, 'Failed to download file', 500);
+  }
+};
+
 module.exports = {
   getAssets,
   getAssetById,
   createAsset,
   updateAsset,
   deleteAsset,
+  downloadAsset,
+  downloadFile,
 };

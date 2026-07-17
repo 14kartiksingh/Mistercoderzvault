@@ -24,22 +24,47 @@ model Tag {
   createdAt DateTime @default(now())
 }
 
+enum UploadType {
+  SINGLE
+  MULTIPART
+  FOLDER
+}
+
 model Asset {
-  id           String   @id @default(uuid())
+  id           String      @id @default(uuid())
   name         String
   categoryId   String
-  category     Category @relation(fields: [categoryId], references: [id])
-  tags         Tag[]    // Implicit many-to-many relation
-  fileType     String
+  category     Category    @relation(fields: [categoryId], references: [id])
+  tags         Tag[]       // Implicit many-to-many relation
+  contentType  String
   sizeBytes    BigInt
   description  String?
   thumbnailUrl String?
-  visibility   String   @default("PRIVATE") // string enum
+  visibility   String      @default("PRIVATE") // string enum
   metadata     Json?
-  isDeleted    Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isDeleted    Boolean     @default(false)
+  uploadType   UploadType  @default(SINGLE)
+  isPending    Boolean     @default(false)
+  files        AssetFile[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@index([categoryId])
   @@index([visibility])
+}
+
+model AssetFile {
+  id                String   @id @default(uuid())
+  assetId           String
+  asset             Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  partNumber        Int?
+  relativePath      String?
+  telegramFileId    String?
+  telegramMessageId Int?
+  fileName          String
+  fileSize          BigInt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([assetId])
 }

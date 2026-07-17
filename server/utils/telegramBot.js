@@ -32,6 +32,18 @@ const checkUploadStatus = (id) => {
   return 'waiting';
 };
 
+const getActiveAssetId = (id) => {
+  if (currentUploadId === id && currentMetadata) {
+    return currentMetadata.assetId || null;
+  }
+  return null;
+};
+
+const clearSession = () => {
+  currentUploadId = null;
+  currentMetadata = null;
+};
+
 const initBot = () => {
   if (!token) {
     console.warn('TELEGRAM_BOT_TOKEN is not set. Telegram bot will not start.');
@@ -71,9 +83,44 @@ const initBot = () => {
     bot.sendMessage(chatId, 'Welcome to MISTER CODERZ Vault.\n\nSend me the file you want to upload.');
   });
 
+  // Handle /done command
+  bot.on('message', async (msg) => {
+    if (msg.text && msg.text.trim() === '/done') {
+      const chatId = msg.chat.id;
+      const userId = msg.from.id;
+
+      if (!isAuthorized(userId)) {
+        bot.sendMessage(chatId, 'Unauthorized.');
+        return;
+      }
+
+      if (!currentUploadId) {
+        bot.sendMessage(chatId, 'No active upload session.');
+        return;
+      }
+
+      const assetId = currentMetadata.assetId;
+      try {
+        if (assetId) {
+          await prisma.asset.update({
+            where: { id: assetId },
+            data: { isPending: false }
+          });
+        }
+        markUploadComplete(currentUploadId);
+        const name = currentMetadata.title || 'Upload';
+        clearSession();
+        bot.sendMessage(chatId, `✅ Upload finished manually.\n\nAsset "${name}" is now available in the Vault.`);
+      } catch (error) {
+        console.error('Error in /done command:', error);
+        bot.sendMessage(chatId, 'Error finishing upload. Please try again.');
+      }
+    }
+  });
+
   // Handle various file types
   bot.on('message', async (msg) => {
-    // Ignore commands like /start
+    // Ignore commands
     if (msg.text && msg.text.startsWith('/')) return;
 
     const chatId = msg.chat.id;
@@ -136,60 +183,137 @@ const initBot = () => {
 
       // Store Asset in Database if metadata is available
       if (currentMetadata) {
-        try {
-          // Prepare tags for Prisma connectOrCreate
-          const tagConnectOrCreate = (currentMetadata.tags || []).map((t) => {
-            const slug = t.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-            return {
-              where: { slug },
-              create: { name: t, slug },
-            };
-          });
+        const uploadType = currentMetadata.uploadType || 'SINGLE';
 
-          // Find or create category based on the name passed
-          const categorySlug = currentMetadata.category.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          let category = await prisma.category.findUnique({
-            where: { slug: categorySlug }
-          });
-          
-          if (!category) {
-            category = await prisma.category.create({
+        if (uploadType === 'SINGLE') {
+          try {
+            // Prepare tags for Prisma connectOrCreate
+            const tagConnectOrCreate = (currentMetadata.tags || []).map((t) => {
+              const slug = t.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+              return {
+                where: { slug },
+                create: { name: t, slug },
+              };
+            });
+
+            // Find or create category based on the name passed
+            const categorySlug = currentMetadata.category.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            let category = await prisma.category.findUnique({
+              where: { slug: categorySlug }
+            });
+            
+            if (!category) {
+              category = await prisma.category.create({
+                data: {
+                  name: currentMetadata.category,
+                  slug: categorySlug
+                }
+              });
+            }
+
+            const newAsset = await prisma.asset.create({
               data: {
-                name: currentMetadata.category,
-                slug: categorySlug
+                name: currentMetadata.title || fileName,
+                categoryId: category.id,
+                contentType: mimeType,
+                sizeBytes: BigInt(fileSize),
+                description: currentMetadata.description || null,
+                thumbnailUrl: currentMetadata.thumbnail || null,
+                visibility: 'PRIVATE', // default
+                uploadType: 'SINGLE',
+                isPending: false,
+                tags: {
+                  connectOrCreate: tagConnectOrCreate,
+                },
+                files: {
+                  create: {
+                    fileName: fileName,
+                    fileSize: BigInt(fileSize),
+                    telegramFileId: fileId,
+                    telegramMessageId: result.message_id
+                  }
+                }
               }
             });
+            console.log(`Asset saved to database (SINGLE): ${newAsset.id}`);
+            
+            writeLog(userId, fileName, fileSize, fileId, 'SUCCESS');
+            markUploadComplete(currentUploadId);
+            clearSession();
+
+            const successMsg = `✅ Upload completed.\n\nFilename:\n${fileName}\n\nYour file has been securely stored inside MISTER CODERZ Vault.`;
+            bot.sendMessage(chatId, successMsg);
+          } catch (dbError) {
+            console.error('Error saving SINGLE asset to database:', dbError);
+            bot.sendMessage(chatId, 'Error saving asset to database. Please try again.');
           }
+        } else {
+          // MULTIPART or FOLDER upload: match files using filename + fileSize
+          const assetId = currentMetadata.assetId;
+          try {
+            // Find a pending AssetFile record
+            const pendingFile = await prisma.assetFile.findFirst({
+              where: {
+                assetId: assetId,
+                fileName: fileName,
+                fileSize: BigInt(fileSize),
+                telegramFileId: null
+              }
+            });
 
-          const newAsset = await prisma.asset.create({
-            data: {
-              name: currentMetadata.title || fileName,
-              categoryId: category.id,
-              fileType: mimeType,
-              sizeBytes: BigInt(fileSize),
-              description: currentMetadata.description || null,
-              thumbnailUrl: currentMetadata.thumbnail || null,
-              visibility: 'PRIVATE', // default
-              metadata: { fileId, telegramFileName: fileName },
-              tags: {
-                connectOrCreate: tagConnectOrCreate,
-              },
+            if (pendingFile) {
+              // Update the AssetFile record
+              await prisma.assetFile.update({
+                where: { id: pendingFile.id },
+                data: {
+                  telegramFileId: fileId,
+                  telegramMessageId: result.message_id
+                }
+              });
+
+              // Check if any files are still pending
+              const remainingPending = await prisma.assetFile.count({
+                where: {
+                  assetId: assetId,
+                  telegramFileId: null
+                }
+              });
+
+              const totalFiles = await prisma.assetFile.count({
+                where: { assetId: assetId }
+              });
+
+              const uploadedCount = totalFiles - remainingPending;
+              writeLog(userId, fileName, fileSize, fileId, 'SUCCESS');
+
+              if (remainingPending === 0) {
+                // All files are uploaded! Set isPending: false on Asset
+                await prisma.asset.update({
+                  where: { id: assetId },
+                  data: { isPending: false }
+                });
+                
+                markUploadComplete(currentUploadId);
+                const assetName = currentMetadata.title || 'Asset';
+                clearSession();
+                
+                bot.sendMessage(chatId, `✅ All files uploaded successfully! (${uploadedCount}/${totalFiles})\n\nAsset "${assetName}" is now available in the Vault.`);
+              } else {
+                bot.sendMessage(chatId, `📥 File received: ${fileName}\nProgress: ${uploadedCount}/${totalFiles} files uploaded.`);
+              }
+            } else {
+              bot.sendMessage(chatId, `⚠️ Received file "${fileName}" (${fileSize} bytes) but it does not match any pending files in your current upload session.`);
             }
-          });
-          console.log(`Asset saved to database: ${newAsset.id}`);
-        } catch (dbError) {
-          console.error('Error saving asset to database:', dbError);
+          } catch (dbError) {
+            console.error('Error matching file in MULTIPART/FOLDER upload:', dbError);
+            bot.sendMessage(chatId, 'Error processing file. Please try again.');
+          }
         }
+      } else {
+        // Active upload metadata missing but bot is authorized: handle as a generic single upload or log warning
+        writeLog(userId, fileName, fileSize, fileId, 'SUCCESS');
+        bot.sendMessage(chatId, `📥 Received "${fileName}". However, no active metadata session is running on the dashboard. Use the Admin Panel to set metadata.`);
       }
-
-      writeLog(userId, fileName, fileSize, fileId, 'SUCCESS');
-
-      // Mark the upload as completed
-      markUploadComplete(currentUploadId);
-      currentMetadata = null; // Clear it
-
-      const successMsg = `✅ Upload completed.\n\nFilename:\n${fileName}\n\nYour file has been securely stored inside MISTER CODERZ Vault.`;
-      bot.sendMessage(chatId, successMsg);
 
     } catch (error) {
       console.error('Error copying message to storage channel:', error.message);
@@ -204,5 +328,8 @@ const initBot = () => {
 module.exports = {
   initBot,
   setCurrentUploadId,
-  checkUploadStatus
+  checkUploadStatus,
+  markUploadComplete,
+  getActiveAssetId,
+  clearSession
 };

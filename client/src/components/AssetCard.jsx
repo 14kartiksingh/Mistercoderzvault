@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const formatBytes = (bytes) => {
   if (bytes === 0) return '0 Bytes';
@@ -48,9 +49,17 @@ const AssetCard = ({ asset, isAdmin, onEdit, onDelete }) => {
           </div>
         )}
         <div className="min-w-0">
-          <h4 className="font-body-md font-semibold text-text-high-contrast truncate">{asset.name}</h4>
+          <Link to={`/download/${asset.id}`} className="hover:underline">
+            <h4 className="font-body-md font-semibold text-text-high-contrast truncate">{asset.name}</h4>
+          </Link>
           <div className="flex gap-2 items-center mt-1">
             <span className="font-label-mono text-[10px] text-primary bg-primary/10 px-1 uppercase">{asset.category?.name || 'UNKNOWN'}</span>
+            {asset.uploadType && asset.uploadType !== 'SINGLE' && (
+              <span className="font-label-mono text-[10px] text-accent bg-accent/15 px-1 uppercase flex items-center gap-0.5" style={{ color: 'var(--color-primary)' }}>
+                <span className="material-symbols-outlined text-[10px]" data-icon={asset.uploadType === 'FOLDER' ? 'folder' : 'layers'}>{asset.uploadType === 'FOLDER' ? 'folder' : 'layers'}</span>
+                {asset.uploadType === 'FOLDER' ? 'Folder' : `${asset.files?.length || 0} Parts`}
+              </span>
+            )}
             <span className="font-label-mono text-[10px] text-text-muted">{sizeFormatted}</span>
           </div>
         </div>
@@ -76,9 +85,13 @@ const AssetCard = ({ asset, isAdmin, onEdit, onDelete }) => {
               </button>
             </>
           )}
-          <button className="text-primary hover:text-primary-hover transition-colors flex items-center justify-center" title="Download">
+          <Link 
+            to={`/download/${asset.id}`}
+            className="text-primary hover:text-primary-hover transition-colors flex items-center justify-center" 
+            title="Download"
+          >
             <span className="material-symbols-outlined text-[18px]" data-icon="download">download</span>
-          </button>
+          </Link>
         </div>
       </div>
     </div>

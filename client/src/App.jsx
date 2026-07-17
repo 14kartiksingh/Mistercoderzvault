@@ -10,6 +10,7 @@ import ChangePassword from './pages/ChangePassword';
 import AdminDashboard from './pages/AdminDashboard';
 import UploadMetadata from './pages/UploadMetadata';
 import CategoryBrowser from './pages/CategoryBrowser';
+import DownloadAsset from './pages/DownloadAsset';
 import { useNavigate } from 'react-router-dom';
 
 function Home({ isAdmin }) {
@@ -71,10 +72,12 @@ function App() {
       <Routes>
         <Route path="/" element={<Home isAdmin={false} />} />
         <Route path="/category/:slug" element={<CategoryBrowser isAdmin={false} />} />
+        <Route path="/download/:id" element={<DownloadAsset isAdmin={false} />} />
         
         {/* Admin Routes */}
         <Route path="/admin" element={<Home isAdmin={true} />} />
         <Route path="/admin/category/:slug" element={<CategoryBrowser isAdmin={true} />} />
+        <Route path="/admin/download/:id" element={<DownloadAsset isAdmin={true} />} />
         <Route path="/admin/upload" element={<UploadMetadata />} />
         <Route path="/admin/change-password" element={<ChangePassword />} />
         
