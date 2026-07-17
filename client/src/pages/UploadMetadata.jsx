@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const formatBytes = (bytes) => {
   if (bytes === 0) return '0 Bytes';
@@ -10,6 +10,7 @@ const formatBytes = (bytes) => {
 };
 
 function UploadMetadata() {
+  const navigate = useNavigate();
   const [uploadState, setUploadState] = useState('idle'); // idle | uploading | complete
   const [uploadId, setUploadId] = useState('');
   const [assetId, setAssetId] = useState('');
@@ -21,9 +22,6 @@ function UploadMetadata() {
     uploadType: 'SINGLE'
   });
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [tags, setTags] = useState([]);
-  const [tagInput, setTagInput] = useState('');
-  const [thumbnailPreview, setThumbnailPreview] = useState('');
   const [error, setError] = useState('');
   const pollingInterval = useRef(null);
 
@@ -46,29 +44,6 @@ function UploadMetadata() {
       path: file.webkitRelativePath || file.name
     }));
     setSelectedFiles(filesData);
-  };
-
-  const handleThumbnailChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setThumbnailPreview(url);
-    }
-  };
-
-  const handleTagKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const val = tagInput.trim();
-      if (val && !tags.includes(val)) {
-        setTags([...tags, val]);
-      }
-      setTagInput('');
-    }
-  };
-
-  const removeTag = (indexToRemove) => {
-    setTags(tags.filter((_, i) => i !== indexToRemove));
   };
 
   const handleContinue = async (e) => {
@@ -96,8 +71,8 @@ function UploadMetadata() {
           uploadId: newUploadId,
           metadata: {
             ...formData,
-            tags,
-            thumbnail: thumbnailPreview,
+            tags: [],
+            thumbnail: '',
             files: selectedFiles
           }
         })
@@ -166,6 +141,25 @@ function UploadMetadata() {
     }
   };
 
+  const handleCancel = async () => {
+    if (uploadId) {
+      try {
+        const token = localStorage.getItem('token');
+        await fetch(`/api/telegram/upload-cancel/${uploadId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+      } catch (err) {
+        console.error('Error cancelling upload:', err);
+      }
+    }
+    if (pollingInterval.current) clearInterval(pollingInterval.current);
+    handleReset();
+    navigate('/admin');
+  };
+
   const handleReset = () => {
     setUploadState('idle');
     setUploadId('');
@@ -173,8 +167,6 @@ function UploadMetadata() {
     setAssetDetails(null);
     setFormData({ title: '', description: '', category: 'Games', uploadType: 'SINGLE' });
     setSelectedFiles([]);
-    setTags([]);
-    setThumbnailPreview('');
     setError('');
   };
 
@@ -272,12 +264,12 @@ function UploadMetadata() {
                 Finish Upload (All Sent)
               </button>
             )}
-            <Link
-              to="/admin"
+            <button
+              onClick={handleCancel}
               className="w-full py-3.5 text-center rounded-xl font-medium transition-colors bg-surface-elevated text-text-base hover:text-primary border border-border-subtle"
             >
               Cancel Upload
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -367,56 +359,29 @@ function UploadMetadata() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-7">
-            <div className="space-y-1.5">
+          {formData.uploadType !== 'SINGLE' && (
+            <div className="space-y-1.5 animate-fadeIn">
               <label className="block text-sm font-semibold text-text-high-contrast">
-                Thumbnail Image
+                {formData.uploadType === 'MULTIPART' ? 'Select Archive Parts *' : 'Select Folder *'}
               </label>
               <div className="relative w-full h-12 bg-surface-container border border-border-subtle rounded-xl hover:border-primary/50 transition-colors flex items-center px-4 cursor-pointer overflow-hidden group">
                 <input
                   type="file"
-                  accept="image/*"
-                  onChange={handleThumbnailChange}
+                  multiple={formData.uploadType === 'MULTIPART'}
+                  webkitdirectory={formData.uploadType === 'FOLDER' ? '' : undefined}
+                  directory={formData.uploadType === 'FOLDER' ? '' : undefined}
+                  onChange={handleFilesChange}
                   className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
                 />
-                {thumbnailPreview ? (
-                  <div className="flex items-center gap-3 w-full">
-                    <img src={thumbnailPreview} alt="Preview" className="h-8 w-8 object-cover rounded-md" />
-                    <span className="text-sm text-text-base truncate">Image selected</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-text-muted group-hover:text-primary transition-colors">
-                    <span className="material-symbols-outlined text-[20px]" data-icon="image">image</span>
-                    <span className="text-sm font-medium">Choose image...</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {formData.uploadType !== 'SINGLE' && (
-              <div className="space-y-1.5 animate-fadeIn">
-                <label className="block text-sm font-semibold text-text-high-contrast">
-                  {formData.uploadType === 'MULTIPART' ? 'Select Archive Parts *' : 'Select Folder *'}
-                </label>
-                <div className="relative w-full h-12 bg-surface-container border border-border-subtle rounded-xl hover:border-primary/50 transition-colors flex items-center px-4 cursor-pointer overflow-hidden group">
-                  <input
-                    type="file"
-                    multiple={formData.uploadType === 'MULTIPART'}
-                    webkitdirectory={formData.uploadType === 'FOLDER' ? '' : undefined}
-                    directory={formData.uploadType === 'FOLDER' ? '' : undefined}
-                    onChange={handleFilesChange}
-                    className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
-                  />
-                  <div className="flex items-center gap-2 text-text-muted group-hover:text-primary transition-colors">
-                    <span className="material-symbols-outlined text-[20px]" data-icon="folder_open">folder_open</span>
-                    <span className="text-sm font-medium">
-                      {selectedFiles.length > 0 ? `${selectedFiles.length} files selected` : `Select files...`}
-                    </span>
-                  </div>
+                <div className="flex items-center gap-2 text-text-muted group-hover:text-primary transition-colors">
+                  <span className="material-symbols-outlined text-[20px]" data-icon="folder_open">folder_open</span>
+                  <span className="text-sm font-medium">
+                    {selectedFiles.length > 0 ? `${selectedFiles.length} files selected` : `Select files...`}
+                  </span>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="block text-sm font-semibold text-text-high-contrast" htmlFor="description">
@@ -431,31 +396,6 @@ function UploadMetadata() {
               className="w-full px-4 py-3 bg-surface-container border border-border-subtle rounded-xl text-text-high-contrast focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none placeholder:text-text-muted/50"
               placeholder="Enter a description..."
             />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-semibold text-text-high-contrast" htmlFor="tagInput">
-              Tags
-            </label>
-            <div className="p-2 bg-surface-container border border-border-subtle rounded-xl flex flex-wrap gap-2 focus-within:ring-2 focus-within:ring-primary/50 transition-all min-h-[56px] items-center">
-              {tags.map((tag, idx) => (
-                <div key={idx} className="flex items-center gap-1.5 bg-surface-elevated border border-border-subtle px-3 py-1.5 rounded-full text-sm text-text-high-contrast group">
-                  <span>{tag}</span>
-                  <button type="button" onClick={() => removeTag(idx)} className="text-text-muted hover:text-error transition-colors flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[16px]" data-icon="close">close</span>
-                  </button>
-                </div>
-              ))}
-              <input
-                id="tagInput"
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleTagKeyDown}
-                className="flex-1 min-w-[120px] bg-transparent outline-none text-text-high-contrast text-sm px-2 py-1 placeholder:text-text-muted/50"
-                placeholder={tags.length === 0 ? "Type and press Enter..." : ""}
-              />
-            </div>
           </div>
 
           <div className="pt-8">

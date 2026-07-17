@@ -70,8 +70,14 @@ const AssetCard = ({ asset, isAdmin, onEdit, onDelete }) => {
       );
     }
     // Single file
-    const ext = asset.name ? asset.name.split('.').pop().toUpperCase() : '';
-    const displayType = (ext && ext.length <= 4 && !/^[0-9]+$/.test(ext)) ? ext : 'File';
+    let displayType = 'FILE';
+    if (asset.name && asset.name.includes('.')) {
+      const parts = asset.name.split('.');
+      const ext = parts.pop().toUpperCase();
+      if (ext && ext.length <= 6 && /^[A-Z0-9]+$/.test(ext)) {
+        displayType = ext;
+      }
+    }
     return (
       <span className="flex items-center gap-1">
         <span className="material-symbols-outlined text-[12px]">description</span>
@@ -156,11 +162,11 @@ const AssetCard = ({ asset, isAdmin, onEdit, onDelete }) => {
           </Link>
 
           <a 
-            href={downloadPath}
-            target="_blank"
+            href={asset.uploadType === 'SINGLE' ? downloadPath : detailPath}
+            target={asset.uploadType === 'SINGLE' ? "_blank" : "_self"}
             rel="noreferrer"
             className="p-1 text-primary hover:text-primary-hover hover:scale-105 active:scale-95 transition-all flex items-center justify-center" 
-            title="Download"
+            title={asset.uploadType === 'SINGLE' ? "Download" : "Browse & Download"}
           >
             <span className="material-symbols-outlined text-[20px]">download</span>
           </a>

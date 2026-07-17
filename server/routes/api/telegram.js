@@ -132,4 +132,39 @@ router.post('/upload-finish/:uploadId', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * Cancel an upload session manually (clean up pending database asset and clear session)
+ * POST /api/telegram/upload-cancel/:uploadId
+ */
+router.post('/upload-cancel/:uploadId', requireAuth, async (req, res) => {
+  const { uploadId } = req.params;
+  const assetId = getActiveAssetId(uploadId);
+
+  try {
+    if (assetId) {
+      // Verify first that it's a pending asset
+      const asset = await prisma.asset.findUnique({
+        where: { id: assetId }
+      });
+
+      if (asset && asset.isPending) {
+        // Delete dependent AssetFile records first
+        await prisma.assetFile.deleteMany({
+          where: { assetId: assetId }
+        });
+        // Delete the Asset record itself
+        await prisma.asset.delete({
+          where: { id: assetId }
+        });
+        console.log(`[Cancel Upload] Cleaned up pending database records for Asset ID: ${assetId}`);
+      }
+    }
+    clearSession();
+    return sendSuccess(res, { message: 'Upload successfully cancelled' });
+  } catch (error) {
+    console.error('Error cancelling upload session:', error);
+    return sendError(res, 'Failed to cancel upload session', 500);
+  }
+});
+
 module.exports = router;

@@ -67,7 +67,6 @@ const DirectoriesGrid = ({ isAdmin }) => {
     <section className="px-margin-mobile mb-section-gap">
       <div className="flex items-center justify-between mb-4 select-none">
         <h2 className="font-headline-sm text-headline-sm text-text-high-contrast uppercase tracking-tighter">Directories</h2>
-        <span className="font-label-mono text-label-mono text-text-muted">ROOT/VOL_01</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
         {categories.map((category) => {

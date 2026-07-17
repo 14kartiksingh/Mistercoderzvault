@@ -13,11 +13,19 @@ import AssetCard from './components/AssetCard';
 import EditAssetModal from './components/EditAssetModal';
 
 const formatBytes = (bytes) => {
-  if (bytes === 0) return '0 Bytes';
+  if (!bytes || bytes <= 0) return '0 KB';
   const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const sizes = ['KB', 'MB', 'GB', 'TB'];
+  let i = Math.floor(Math.log(bytes) / Math.log(k));
+  if (i === 0) {
+    return (bytes / k).toFixed(2) + ' KB';
+  }
+  const sizesIndex = i - 1;
+  if (sizesIndex >= sizes.length) {
+    return (bytes / Math.pow(k, sizes.length)).toFixed(2) + ' TB';
+  }
+  const val = bytes / Math.pow(k, i);
+  return parseFloat(val.toFixed(2)) + ' ' + sizes[sizesIndex];
 };
 
 function Home({ isAdmin }) {
@@ -107,7 +115,7 @@ function Home({ isAdmin }) {
   }, [assets, searchTerm]);
 
   const totalStorageFormatted = useMemo(() => {
-    if (!stats || !stats.totalStorage) return '0 Bytes';
+    if (!stats || stats.totalStorage === undefined || stats.totalStorage === null) return '0 KB';
     return formatBytes(Number(stats.totalStorage));
   }, [stats]);
 
@@ -118,18 +126,24 @@ function Home({ isAdmin }) {
         
         {/* Premium Hero Section */}
         <section className="px-margin-mobile pt-10 pb-8 flex flex-col items-center text-center select-none max-w-4xl mx-auto">
-          <h1 className="font-headline-lg text-4xl sm:text-5xl md:text-6xl text-text-high-contrast uppercase tracking-tighter mb-2">
+          <h1 className="font-headline-lg text-4xl sm:text-5xl md:text-6xl text-text-high-contrast uppercase tracking-tighter mb-6">
             VAULT
           </h1>
-          <p className="text-text-muted text-[10px] sm:text-xs tracking-wider font-label-mono mb-6 uppercase">
-            Secure high-performance storage by MISTER CODERZ
-          </p>
           <div className="w-full max-w-2xl mb-6">
             <SearchBar value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            {!searchTerm && (
+              <p className="text-[11px] sm:text-xs text-text-muted/70 mt-3 font-label-mono uppercase tracking-wide">
+                Search your Vault to instantly find files, folders, and archives.
+              </p>
+            )}
           </div>
           
           {/* Statistics Strip */}
-          <div className="w-full max-w-2xl bg-surface-elevated border border-border-subtle grid grid-cols-3 divide-x divide-border-subtle p-3 rounded-sm">
+          <div className={`w-full max-w-2xl bg-surface-elevated border border-border-subtle grid ${
+            !loadingStats && (!stats || stats.totalStorage === undefined || stats.totalStorage === null)
+              ? 'grid-cols-2'
+              : 'grid-cols-3'
+          } divide-x divide-border-subtle p-3 rounded-sm`}>
             <div className="flex flex-col items-center justify-center p-1">
               {loadingStats ? (
                 <div className="h-5 w-12 bg-surface-container animate-pulse rounded mb-1"></div>
@@ -140,16 +154,20 @@ function Home({ isAdmin }) {
               )}
               <span className="text-[9px] font-label-mono text-text-muted uppercase tracking-wider">Assets</span>
             </div>
-            <div className="flex flex-col items-center justify-center p-1">
-              {loadingStats ? (
-                <div className="h-5 w-16 bg-surface-container animate-pulse rounded mb-1"></div>
-              ) : (
-                <span className="font-label-mono text-sm sm:text-base font-bold text-text-high-contrast">
-                  {totalStorageFormatted}
-                </span>
-              )}
-              <span className="text-[9px] font-label-mono text-text-muted uppercase tracking-wider">Storage</span>
-            </div>
+            
+            {(loadingStats || (stats && stats.totalStorage !== undefined && stats.totalStorage !== null)) && (
+              <div className="flex flex-col items-center justify-center p-1">
+                {loadingStats ? (
+                  <div className="h-5 w-16 bg-surface-container animate-pulse rounded mb-1"></div>
+                ) : (
+                  <span className="font-label-mono text-sm sm:text-base font-bold text-text-high-contrast">
+                    {totalStorageFormatted}
+                  </span>
+                )}
+                <span className="text-[9px] font-label-mono text-text-muted uppercase tracking-wider">Storage</span>
+              </div>
+            )}
+            
             <div className="flex flex-col items-center justify-center p-1">
               {loadingStats ? (
                 <div className="h-5 w-10 bg-surface-container animate-pulse rounded mb-1"></div>
@@ -196,63 +214,73 @@ function Home({ isAdmin }) {
         <div className="max-w-4xl mx-auto">
           {/* Categories Section */}
           <DirectoriesGrid isAdmin={isAdmin} />
-          {/* All Assets / Catalog Library Section */}
-          <section className="px-margin-mobile mb-section-gap">
-            <div className="flex items-center justify-between mb-4 select-none">
-              <h2 className="font-headline-sm text-headline-sm text-text-high-contrast uppercase tracking-tighter">
-                Library
-              </h2>
-              {searchTerm && (
+          
+          {/* Search Results Section */}
+          {searchTerm && (
+            <section className="px-margin-mobile mb-section-gap animate-fade-in">
+              <div className="flex items-center justify-between mb-4 select-none">
+                <h2 className="font-headline-sm text-headline-sm text-text-high-contrast uppercase tracking-tighter flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[20px] text-primary">search</span>
+                  Search Results
+                </h2>
                 <span className="font-label-mono text-[9px] text-text-muted bg-surface-container px-2 py-0.5 rounded-sm select-none">
                   SHOWING {filteredAssets.length} OF {assets.length} ASSETS
                 </span>
-              )}
-            </div>
-            {loadingAssets ? (
-              <div className="flex flex-col gap-px bg-border-subtle border border-border-subtle">
-                {[...Array(4)].map((_, idx) => (
-                  <div key={idx} className="bg-surface-elevated flex items-center justify-between p-4 border border-border-subtle rounded-sm">
-                    <div className="flex items-center gap-4 w-full">
-                      <div className="w-12 h-12 bg-surface-container animate-pulse rounded shrink-0"></div>
-                      <div className="w-1/2">
-                        <div className="h-4 bg-surface-container animate-pulse rounded w-3/4 mb-2"></div>
-                        <div className="h-3 bg-surface-container animate-pulse rounded w-1/2"></div>
+              </div>
+              
+              {loadingAssets ? (
+                <div className="flex flex-col gap-px bg-border-subtle border border-border-subtle">
+                  {[...Array(3)].map((_, idx) => (
+                    <div key={idx} className="bg-surface-elevated flex items-center justify-between p-4 border border-border-subtle rounded-sm">
+                      <div className="flex items-center gap-4 w-full">
+                        <div className="w-12 h-12 bg-surface-container animate-pulse rounded shrink-0"></div>
+                        <div className="w-1/2">
+                          <div className="h-4 bg-surface-container animate-pulse rounded w-3/4 mb-2"></div>
+                          <div className="h-3 bg-surface-container animate-pulse rounded w-1/2"></div>
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+              ) : error ? (
+                <div className="p-8 text-center text-error bg-surface-elevated border border-border-subtle rounded-sm select-none">
+                  {error}
+                </div>
+              ) : filteredAssets.length === 0 ? (
+                <div className="p-12 text-center bg-surface-elevated border border-border-subtle rounded-sm flex flex-col items-center justify-center gap-4 select-none animate-fade-in">
+                  <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center border border-border-subtle shadow-inner">
+                    <span className="material-symbols-outlined text-[28px] text-text-muted">search_off</span>
                   </div>
-                ))}
-              </div>
-            ) : error ? (
-              <div className="p-8 text-center text-error bg-surface-elevated border border-border-subtle rounded-sm select-none">
-                {error}
-              </div>
-            ) : filteredAssets.length === 0 ? (
-              <div className="p-8 text-center text-text-muted bg-surface-elevated border border-border-subtle rounded-sm flex flex-col items-center justify-center gap-3">
-                <span className="material-symbols-outlined text-[32px] text-text-muted">search_off</span>
-                <span className="font-label-mono text-xs uppercase">No matching assets found</span>
-                {searchTerm && (
+                  <div className="flex flex-col gap-1.5 max-w-sm">
+                    <h3 className="font-label-mono text-xs text-text-high-contrast uppercase tracking-wider font-semibold">
+                      No matching assets found
+                    </h3>
+                    <p className="text-[11px] text-text-muted leading-relaxed">
+                      Try another keyword or browse a directory.
+                    </p>
+                  </div>
                   <button 
                     onClick={() => setSearchTerm('')} 
-                    className="text-xs font-label-mono font-bold text-primary hover:underline uppercase"
+                    className="text-[10px] font-label-mono font-bold text-primary hover:underline uppercase tracking-wider border border-primary/20 px-3 py-1.5 rounded-sm bg-primary/5 hover:bg-primary/10 transition-colors"
                   >
                     Clear Search
                   </button>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-px bg-border-subtle border border-border-subtle">
-                {filteredAssets.map((asset) => (
-                  <AssetCard 
-                    key={asset.id} 
-                    asset={asset} 
-                    isAdmin={isAdmin}
-                    onEdit={setEditingAsset}
-                    onDelete={setAssetToDelete}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-px bg-border-subtle border border-border-subtle animate-fade-in">
+                  {filteredAssets.map((asset) => (
+                    <AssetCard 
+                      key={asset.id} 
+                      asset={asset} 
+                      isAdmin={isAdmin}
+                      onEdit={setEditingAsset}
+                      onDelete={setAssetToDelete}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
         </div>
 
         {/* Reusable Modals */}

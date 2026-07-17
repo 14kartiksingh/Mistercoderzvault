@@ -9,9 +9,6 @@ const Header = () => {
         <h1 className="font-headline-sm text-headline-sm font-bold text-text-high-contrast tracking-tight">MISTER CODERZ Vault</h1>
       </div>
       <div className="flex items-center gap-4">
-        <button className="text-text-muted hover:text-primary transition-colors duration-200">
-          <span className="material-symbols-outlined" data-icon="download">download</span>
-        </button>
         <Link to="/admin/login" className="font-label-mono text-label-mono text-primary font-bold border border-primary px-3 py-1 rounded-sm uppercase tracking-wider hover:bg-primary/10 transition-colors">
           Admin
         </Link>

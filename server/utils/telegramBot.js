@@ -5,17 +5,17 @@ const prisma = require('../config/db');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const storageChannelId = process.env.TELEGRAM_STORAGE_CHANNEL_ID;
-let adminId = process.env.TELEGRAM_ADMIN_ID ? String(process.env.TELEGRAM_ADMIN_ID) : null;
-
 let bot = null;
 
 let currentUploadId = null;
 let currentMetadata = null;
+let currentTelegramUserId = null; // Dynamically bound on first message/file during session
 const completedUploads = new Set();
 
 const setCurrentUploadId = (id, metadata) => {
   currentUploadId = id;
   currentMetadata = metadata;
+  currentTelegramUserId = null;
 };
 
 const markUploadComplete = (id) => {
@@ -42,6 +42,7 @@ const getActiveAssetId = (id) => {
 const clearSession = () => {
   currentUploadId = null;
   currentMetadata = null;
+  currentTelegramUserId = null;
 };
 
 const initBot = () => {
@@ -67,16 +68,32 @@ const initBot = () => {
   };
 
   const isAuthorized = (msgUserId) => {
-    return adminId && String(msgUserId) === adminId;
+    // If no session is active, unauthorized
+    if (!currentUploadId) return false;
+
+    // Dynamically bind to the first user sending a message/file
+    if (!currentTelegramUserId) {
+      currentTelegramUserId = String(msgUserId);
+      console.log(`[Telegram Auth] Dynamically bound active session ${currentUploadId} to Telegram User ID: ${msgUserId}`);
+      return true;
+    }
+
+    // Must match the bound user
+    return String(msgUserId) === currentTelegramUserId;
   };
 
   bot.onText(/^\/start$/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
 
+    if (!currentUploadId) {
+      bot.sendMessage(chatId, '❌ No active upload session.\n\nPlease start an upload from the Vault Admin Panel first.');
+      return;
+    }
+
     if (!isAuthorized(userId)) {
-      console.log(`[Telegram Auth] Unauthorized access attempt from User ID: ${userId}`);
-      bot.sendMessage(chatId, 'Unauthorized.');
+      console.log(`[Telegram Auth] Session ${currentUploadId} already bound to another user. Rejecting User ID: ${userId}`);
+      bot.sendMessage(chatId, '❌ Unauthorized.\n\nThis upload session is already in use by another administrator.');
       return;
     }
 
@@ -89,13 +106,13 @@ const initBot = () => {
       const chatId = msg.chat.id;
       const userId = msg.from.id;
 
-      if (!isAuthorized(userId)) {
-        bot.sendMessage(chatId, 'Unauthorized.');
+      if (!currentUploadId) {
+        bot.sendMessage(chatId, '❌ No active upload session.');
         return;
       }
 
-      if (!currentUploadId) {
-        bot.sendMessage(chatId, 'No active upload session.');
+      if (!isAuthorized(userId)) {
+        bot.sendMessage(chatId, '❌ Unauthorized.\n\nThis upload session is already in use by another administrator.');
         return;
       }
 
@@ -126,10 +143,15 @@ const initBot = () => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
 
+    if (!currentUploadId) {
+      bot.sendMessage(chatId, '❌ No active upload session.\n\nPlease start an upload from the Vault Admin Panel first.');
+      return;
+    }
+
     // Check authorization first
     if (!isAuthorized(userId)) {
       console.log(`[Telegram Auth] Unauthorized upload attempt from User ID: ${userId}`);
-      bot.sendMessage(chatId, 'Unauthorized.');
+      bot.sendMessage(chatId, '❌ Unauthorized.\n\nThis upload session is already in use by another administrator.');
       return;
     }
 
@@ -251,15 +273,70 @@ const initBot = () => {
           // MULTIPART or FOLDER upload: match files using filename + fileSize
           const assetId = currentMetadata.assetId;
           try {
-            // Find a pending AssetFile record
-            const pendingFile = await prisma.assetFile.findFirst({
+            // Find all pending files for this asset
+            const pendingFiles = await prisma.assetFile.findMany({
               where: {
                 assetId: assetId,
-                fileName: fileName,
-                fileSize: BigInt(fileSize),
                 telegramFileId: null
               }
             });
+
+            let pendingFile = null;
+
+            if (pendingFiles.length > 0) {
+              // Priority 1: Unique file size match
+              const sizeMatches = pendingFiles.filter(f => BigInt(f.fileSize) === BigInt(fileSize));
+              if (sizeMatches.length === 1) {
+                pendingFile = sizeMatches[0];
+                console.log(`[Folder Match] Matched by unique file size: ${pendingFile.fileName} (${fileSize} bytes)`);
+              } 
+              
+              // Priority 2: Size matches multiple files, prioritize by filename
+              if (!pendingFile && sizeMatches.length > 1) {
+                const nameMatch = sizeMatches.find(f => f.fileName.toLowerCase() === fileName.toLowerCase());
+                if (nameMatch) {
+                  pendingFile = nameMatch;
+                  console.log(`[Folder Match] Matched by size & name: ${pendingFile.fileName}`);
+                } else {
+                  // Check extension match
+                  const ext = path.extname(fileName).toLowerCase();
+                  const extMatch = sizeMatches.find(f => path.extname(f.fileName).toLowerCase() === ext);
+                  if (extMatch) {
+                    pendingFile = extMatch;
+                    console.log(`[Folder Match] Matched by size & extension: ${pendingFile.fileName}`);
+                  } else {
+                    // Fallback to the first size match
+                    pendingFile = sizeMatches[0];
+                    console.log(`[Folder Match] Matched by size fallback: ${pendingFile.fileName}`);
+                  }
+                }
+              }
+
+              // Priority 3: Filename match fallback (if size differs, e.g. compressed image/video)
+              if (!pendingFile) {
+                const nameMatch = pendingFiles.find(f => f.fileName.toLowerCase() === fileName.toLowerCase());
+                if (nameMatch) {
+                  pendingFile = nameMatch;
+                  console.log(`[Folder Match] Matched by filename only: ${pendingFile.fileName}`);
+                }
+              }
+
+              // Priority 4: Extension match fallback (if screen.png renamed to Photo.jpg, match same type)
+              if (!pendingFile) {
+                const ext = path.extname(fileName).toLowerCase();
+                const extMatch = pendingFiles.find(f => path.extname(f.fileName).toLowerCase() === ext);
+                if (extMatch) {
+                  pendingFile = extMatch;
+                  console.log(`[Folder Match] Matched by extension only: ${pendingFile.fileName}`);
+                }
+              }
+
+              // Priority 5: Absolute fallback (first pending file)
+              if (!pendingFile) {
+                pendingFile = pendingFiles[0];
+                console.log(`[Folder Match] Absolute fallback (first pending): ${pendingFile.fileName}`);
+              }
+            }
 
             if (pendingFile) {
               // Update the AssetFile record
