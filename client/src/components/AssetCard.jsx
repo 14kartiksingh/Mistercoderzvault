@@ -10,6 +10,7 @@ const formatBytes = (bytes) => {
 };
 
 const formatTimeAgo = (dateString) => {
+  if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
   const diffInSeconds = Math.floor((now - date) / 1000);
@@ -21,7 +22,7 @@ const formatTimeAgo = (dateString) => {
 };
 
 const getIconForCategory = (categoryName) => {
-  const name = categoryName.toUpperCase();
+  const name = categoryName ? categoryName.toUpperCase() : '';
   if (name.includes('GAME')) return 'sports_esports';
   if (name.includes('MOVIE')) return 'movie';
   if (name.includes('APP')) return 'developer_mode_tv';
@@ -31,69 +32,142 @@ const getIconForCategory = (categoryName) => {
   return 'draft';
 };
 
+const getInitials = (name) => {
+  if (!name) return 'VA';
+  const cleanName = name.replace(/[^a-zA-Z0-9 ]/g, '');
+  const parts = cleanName.split(' ').filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+};
+
 const AssetCard = ({ asset, isAdmin, onEdit, onDelete }) => {
   const sizeFormatted = asset.sizeBytes ? formatBytes(Number(asset.sizeBytes)) : 'Unknown';
   const timeFormatted = formatTimeAgo(asset.createdAt);
-  const icon = getIconForCategory(asset.category?.name || '');
+  const categoryName = asset.category?.name || 'UNKNOWN';
+  const icon = getIconForCategory(categoryName);
+  const initials = getInitials(asset.name);
+
+  const getUploadTypeBadge = () => {
+    if (asset.uploadType === 'FOLDER') {
+      return (
+        <span className="flex items-center gap-1">
+          <span className="material-symbols-outlined text-[12px]">folder</span>
+          Folder
+        </span>
+      );
+    }
+    if (asset.uploadType === 'MULTIPART') {
+      return (
+        <span className="flex items-center gap-1">
+          <span className="material-symbols-outlined text-[12px]">layers</span>
+          {asset.files?.length || 0} Parts
+        </span>
+      );
+    }
+    // Single file
+    const ext = asset.name ? asset.name.split('.').pop().toUpperCase() : '';
+    const displayType = (ext && ext.length <= 4 && !/^[0-9]+$/.test(ext)) ? ext : 'File';
+    return (
+      <span className="flex items-center gap-1">
+        <span className="material-symbols-outlined text-[12px]">description</span>
+        {displayType}
+      </span>
+    );
+  };
+
+  const detailPath = isAdmin ? `/admin/download/${asset.id}` : `/download/${asset.id}`;
+  const downloadPath = `/api/assets/${asset.id}/download`;
 
   return (
-    <div className="bg-surface-elevated flex items-center justify-between p-4 hover:bg-surface transition-colors">
+    <div className="group relative flex items-center justify-between p-4 bg-surface-elevated hover:bg-surface border border-border-subtle hover:border-primary/30 transition-all duration-200">
+      
+      {/* Left: Thumbnail & Details */}
       <div className="flex items-center gap-4 min-w-0">
+        
+        {/* Premium Thumbnail Container */}
         {asset.thumbnailUrl ? (
-          <div className="w-10 h-10 shrink-0 rounded overflow-hidden border border-border-subtle">
+          <div className="w-12 h-12 shrink-0 rounded overflow-hidden border border-border-subtle group-hover:border-primary/40 transition-colors duration-200">
             <img src={asset.thumbnailUrl} alt={asset.name} className="w-full h-full object-cover" />
           </div>
         ) : (
-          <div className="w-10 h-10 bg-surface flex items-center justify-center border border-border-subtle shrink-0">
-            <span className="material-symbols-outlined text-primary" data-icon={icon}>{icon}</span>
+          <div className="w-12 h-12 bg-gradient-to-br from-surface-variant to-surface-dim flex flex-col items-center justify-center border border-border-subtle shrink-0 rounded relative group-hover:border-primary/40 transition-colors duration-200">
+            <span className="font-label-mono text-xs font-bold text-text-high-contrast/70 tracking-wider select-none">{initials}</span>
+            <span className="material-symbols-outlined text-primary text-[14px] absolute bottom-1 right-1 opacity-80" data-icon={icon}>{icon}</span>
           </div>
         )}
+
+        {/* Asset Details */}
         <div className="min-w-0">
-          <Link to={`/download/${asset.id}`} className="hover:underline">
-            <h4 className="font-body-md font-semibold text-text-high-contrast truncate">{asset.name}</h4>
+          <Link to={detailPath} className="inline-block max-w-full">
+            <h4 className="font-body-md font-semibold text-text-high-contrast hover:text-primary transition-colors truncate text-sm sm:text-base pr-4" title={asset.name}>
+              {asset.name}
+            </h4>
           </Link>
-          <div className="flex gap-2 items-center mt-1">
-            <span className="font-label-mono text-[10px] text-primary bg-primary/10 px-1 uppercase">{asset.category?.name || 'UNKNOWN'}</span>
-            {asset.uploadType && asset.uploadType !== 'SINGLE' && (
-              <span className="font-label-mono text-[10px] text-accent bg-accent/15 px-1 uppercase flex items-center gap-0.5" style={{ color: 'var(--color-primary)' }}>
-                <span className="material-symbols-outlined text-[10px]" data-icon={asset.uploadType === 'FOLDER' ? 'folder' : 'layers'}>{asset.uploadType === 'FOLDER' ? 'folder' : 'layers'}</span>
-                {asset.uploadType === 'FOLDER' ? 'Folder' : `${asset.files?.length || 0} Parts`}
-              </span>
-            )}
-            <span className="font-label-mono text-[10px] text-text-muted">{sizeFormatted}</span>
+          <div className="flex flex-wrap gap-x-2 gap-y-1 items-center mt-1 text-[10px] sm:text-xs font-label-mono text-text-muted select-none">
+            <span className="text-primary font-bold uppercase">{categoryName}</span>
+            <span>•</span>
+            <span>{sizeFormatted}</span>
+            <span>•</span>
+            <span className="text-text-muted/80">{getUploadTypeBadge()}</span>
           </div>
         </div>
       </div>
-      <div className="flex flex-col items-end shrink-0 pl-2">
-        <span className="font-label-mono text-[10px] text-text-muted mb-2">{timeFormatted}</span>
-        <div className="flex items-center gap-3">
+
+      {/* Right: Date or Hover Actions */}
+      <div className="relative flex items-center shrink-0 pl-2">
+        
+        {/* Time Ago Display (Hidden on Hover) */}
+        <div className="font-label-mono text-[10px] text-text-muted transition-opacity duration-200 group-hover:opacity-0 select-none">
+          {timeFormatted}
+        </div>
+
+        {/* Premium Hover Actions Overlay (Visible on Hover) */}
+        <div className="absolute right-0 flex items-center gap-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-200 bg-gradient-to-l from-surface via-surface pl-6 py-1">
           {isAdmin && (
             <>
               <button 
                 onClick={() => onEdit(asset)}
-                className="text-text-muted hover:text-primary transition-colors flex items-center justify-center"
+                className="p-1 text-text-muted hover:text-primary transition-colors flex items-center justify-center"
                 title="Edit"
               >
-                <span className="material-symbols-outlined text-[18px]" data-icon="edit">edit</span>
+                <span className="material-symbols-outlined text-[18px]">edit</span>
               </button>
               <button 
                 onClick={() => onDelete(asset)}
-                className="text-text-muted hover:text-error transition-colors flex items-center justify-center"
+                className="p-1 text-text-muted hover:text-error transition-colors flex items-center justify-center"
                 title="Delete"
               >
-                <span className="material-symbols-outlined text-[18px]" data-icon="delete">delete</span>
+                <span className="material-symbols-outlined text-[18px]">delete</span>
               </button>
             </>
           )}
+          
           <Link 
-            to={`/download/${asset.id}`}
-            className="text-primary hover:text-primary-hover transition-colors flex items-center justify-center" 
+            to={detailPath}
+            className="px-2.5 py-1 text-[10px] font-label-mono font-bold text-text-high-contrast bg-surface-elevated border border-border-subtle hover:border-primary hover:text-primary transition-all duration-200 rounded-sm shrink-0"
+            title="View Details"
+          >
+            DETAILS
+          </Link>
+
+          <a 
+            href={downloadPath}
+            target="_blank"
+            rel="noreferrer"
+            className="p-1 text-primary hover:text-primary-hover hover:scale-105 active:scale-95 transition-all flex items-center justify-center" 
             title="Download"
           >
-            <span className="material-symbols-outlined text-[18px]" data-icon="download">download</span>
-          </Link>
+            <span className="material-symbols-outlined text-[20px]">download</span>
+          </a>
         </div>
+
       </div>
+
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const SearchBar = () => {
+const SearchBar = ({ value, onChange }) => {
   const [placeholder, setPlaceholder] = useState("Search your vault (e.g., 'Ubuntu ISO', 'Cyberpunk')...");
   
   useEffect(() => {
@@ -28,6 +28,8 @@ const SearchBar = () => {
         className="w-full bg-surface-elevated border border-border-subtle pl-12 pr-4 py-4 rounded-sm text-body-md font-body-md placeholder:text-text-muted focus:border-primary transition-all duration-200" 
         placeholder={placeholder} 
         type="text"
+        value={value}
+        onChange={onChange}
       />
     </div>
   );

@@ -301,6 +301,35 @@ const downloadFile = async (req, res) => {
   }
 };
 
+/**
+ * Get aggregated asset and category statistics
+ */
+const getAssetStats = async (req, res) => {
+  try {
+    const assetsCount = await prisma.asset.count({
+      where: { isDeleted: false, isPending: false }
+    });
+    
+    const sizeSumResult = await prisma.asset.aggregate({
+      where: { isDeleted: false, isPending: false },
+      _sum: {
+        sizeBytes: true
+      }
+    });
+    
+    const categoriesCount = await prisma.category.count();
+
+    return sendSuccess(res, {
+      totalAssets: assetsCount,
+      totalStorage: (sizeSumResult._sum.sizeBytes || 0n).toString(),
+      totalCategories: categoriesCount
+    });
+  } catch (error) {
+    console.error('Error fetching asset stats:', error);
+    return sendError(res, 'Failed to fetch asset stats', 500);
+  }
+};
+
 module.exports = {
   getAssets,
   getAssetById,
@@ -309,4 +338,5 @@ module.exports = {
   deleteAsset,
   downloadAsset,
   downloadFile,
+  getAssetStats,
 };

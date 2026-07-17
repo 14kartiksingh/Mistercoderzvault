@@ -5,6 +5,7 @@ const requireAuth = require('../../middleware/requireAuth');
 
 // Asset CRUD routes
 router.get('/', assetController.getAssets);
+router.get('/stats', assetController.getAssetStats);
 router.get('/:id', assetController.getAssetById);
 router.get('/:id/download', assetController.downloadAsset);
 router.get('/file/:fileId/download', assetController.downloadFile);
