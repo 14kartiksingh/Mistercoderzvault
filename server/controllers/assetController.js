@@ -2,6 +2,8 @@ const prisma = require('../config/db');
 const { sendSuccess, sendError } = require('../utils/response');
 const { getBot } = require('../utils/telegramBot');
 const https = require('https');
+const { Api } = require('telegram');
+const { getTelegramClient, initTelegramClient } = require('../utils/telegramClient');
 /**
  * Get all active assets
  */
@@ -220,7 +222,7 @@ const deleteAsset = async (req, res) => {
 };
 
 /**
- * Download asset endpoint (future-friendly asset-level download)
+ * Download asset endpoint (primary endpoint, now using MTProto)
  */
 const downloadAsset = async (req, res) => {
   try {
@@ -238,28 +240,21 @@ const downloadAsset = async (req, res) => {
       return sendError(res, 'No files associated with this asset', 404);
     }
 
-    const channelId = process.env.TELEGRAM_STORAGE_CHANNEL_ID;
-    if (!channelId) {
-      return sendError(res, 'Storage channel is not configured on the backend', 500);
-    }
-
-    const cleanChannelId = channelId.startsWith('-100') ? channelId.slice(4) : channelId;
-
     if (asset.uploadType === 'SINGLE') {
       const file = asset.files[0];
       if (!file.telegramMessageId) {
         return sendError(res, 'Telegram message not found for this file', 404);
       }
-      return res.redirect(`https://t.me/c/${cleanChannelId}/${file.telegramMessageId}`);
+      return res.redirect(`/api/assets/file/${file.id}/download`);
     } else {
-      // For MULTIPART/FOLDER, return the files list with their download links
+      // For MULTIPART/FOLDER, return the files list with their download links pointing to the primary route
       const filesWithLinks = asset.files.map(f => ({
         id: f.id,
         fileName: f.fileName,
         fileSize: f.fileSize.toString(),
         partNumber: f.partNumber,
         relativePath: f.relativePath,
-        downloadUrl: `https://t.me/c/${cleanChannelId}/${f.telegramMessageId}`
+        downloadUrl: `/api/assets/file/${f.id}/download`
       }));
       return sendSuccess(res, {
         assetId: asset.id,
@@ -275,7 +270,7 @@ const downloadAsset = async (req, res) => {
 };
 
 /**
- * Download file-level endpoint
+ * Download file-level endpoint (primary endpoint, streams from Telegram via MTProto)
  */
 const downloadFile = async (req, res) => {
   try {
@@ -288,17 +283,116 @@ const downloadFile = async (req, res) => {
       return sendError(res, 'File not found or not yet uploaded', 404);
     }
 
+    let client = getTelegramClient();
+    if (!client) {
+      client = await initTelegramClient();
+    }
+
+    if (!client) {
+      return sendError(res, 'Telegram MTProto Client is not initialized. Please ensure TELEGRAM_API_ID and TELEGRAM_API_HASH are configured in the .env file.', 500);
+    }
+
     const channelId = process.env.TELEGRAM_STORAGE_CHANNEL_ID;
     if (!channelId) {
       return sendError(res, 'Storage channel is not configured on the backend', 500);
     }
 
-    const cleanChannelId = channelId.startsWith('-100') ? channelId.slice(4) : channelId;
-    const redirectUrl = `https://t.me/c/${cleanChannelId}/${assetFile.telegramMessageId}`;
-    return res.redirect(redirectUrl);
+    // Resolve the channel entity (can accept string IDs like "-1004305876414")
+    let channelEntity;
+    try {
+      channelEntity = await client.getEntity(channelId);
+    } catch (entityError) {
+      console.error('Failed to resolve channel entity:', entityError);
+      return sendError(res, 'Failed to access Telegram storage channel. Make sure the bot is a member/admin of the channel.', 500);
+    }
+
+    // Fetch the message by message ID
+    let message;
+    try {
+      const messages = await client.getMessages(channelEntity, {
+        ids: [assetFile.telegramMessageId],
+      });
+      message = messages && messages[0];
+    } catch (msgError) {
+      console.error('Failed to retrieve Telegram message:', msgError);
+      return sendError(res, 'Failed to fetch file from Telegram.', 500);
+    }
+
+    if (!message || !message.media) {
+      return sendError(res, 'File media not found in the Telegram message.', 404);
+    }
+
+    // Identify media location and DC ID
+    let fileLocation;
+    let dcId;
+    let mimeType = assetFile.contentType || 'application/octet-stream';
+
+    if (message.media.document) {
+      const doc = message.media.document;
+      fileLocation = new Api.InputDocumentFileLocation({
+        id: doc.id,
+        accessHash: doc.accessHash,
+        fileReference: doc.fileReference,
+        thumbSize: '',
+      });
+      dcId = doc.dcId;
+      mimeType = doc.mimeType || mimeType;
+    } else if (message.media.photo) {
+      const photo = message.media.photo;
+      const sizeType = photo.sizes && photo.sizes.length > 0
+        ? photo.sizes[photo.sizes.length - 1].type
+        : '';
+      fileLocation = new Api.InputPhotoFileLocation({
+        id: photo.id,
+        accessHash: photo.accessHash,
+        fileReference: photo.fileReference,
+        thumbSize: sizeType,
+      });
+      dcId = photo.dcId;
+      mimeType = 'image/jpeg';
+    } else {
+      return sendError(res, 'Unsupported media type on Telegram.', 400);
+    }
+
+    const fileName = assetFile.fileName || 'file';
+    const fileSize = assetFile.fileSize || 0n;
+
+    // Set download response headers
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Length', fileSize.toString());
+    res.setHeader('Accept-Ranges', 'none');
+
+    // Stream the chunks
+    try {
+      for await (const chunk of client.iterDownload({
+        file: fileLocation,
+        dcId: dcId,
+        requestSize: 512 * 1024, // 512KB chunks
+      })) {
+        if (res.destroyed) {
+          console.log(`[Download] Client aborted download for file: ${fileName}`);
+          break;
+        }
+        const canWrite = res.write(chunk);
+        if (!canWrite) {
+          await new Promise((resolve) => res.once('drain', resolve));
+        }
+      }
+      if (!res.destroyed) {
+        res.end();
+      }
+    } catch (downloadError) {
+      console.error('Error during Telegram file streaming:', downloadError);
+      if (!res.headersSent) {
+        return sendError(res, 'Error during file download streaming.', 500);
+      }
+    }
   } catch (error) {
     console.error('Error in downloadFile:', error);
-    return sendError(res, 'Failed to download file', 500);
+    if (!res.headersSent) {
+      return sendError(res, 'Failed to download file via MTProto', 500);
+    }
   }
 };
 

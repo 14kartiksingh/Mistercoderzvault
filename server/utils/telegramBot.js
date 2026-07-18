@@ -50,8 +50,15 @@ const initBot = () => {
     return;
   }
 
-  bot = new TelegramBot(token, { polling: true });
-  console.log('Telegram bot initialized and polling.');
+  const shouldPoll = process.env.TELEGRAM_BOT_POLLING === 'true' || 
+                     (process.env.NODE_ENV !== 'production' && process.env.TELEGRAM_BOT_POLLING !== 'false');
+
+  bot = new TelegramBot(token, { polling: shouldPoll });
+  if (shouldPoll) {
+    console.log('Telegram bot initialized and polling.');
+  } else {
+    console.log('Telegram bot initialized (polling disabled).');
+  }
 
   // Create logs directory if it doesn't exist
   const logsDir = path.join(__dirname, '..', '..', 'logs');
