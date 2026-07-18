@@ -112,14 +112,26 @@ const initBot = () => {
     return;
   }
 
-  const shouldPoll = process.env.TELEGRAM_BOT_POLLING === 'true' || 
-                     (process.env.NODE_ENV !== 'production' && process.env.TELEGRAM_BOT_POLLING !== 'false');
+  const isFirstInstance = !process.env.NODE_APP_INSTANCE || process.env.NODE_APP_INSTANCE === '0';
+  let shouldPoll = false;
+  if (process.env.TELEGRAM_BOT_POLLING === 'true') {
+    shouldPoll = true;
+  } else if (process.env.TELEGRAM_BOT_POLLING === 'false') {
+    shouldPoll = false;
+  } else {
+    // Default fallback: poll in dev, or poll only on first instance in prod (prevents 409 conflict)
+    if (process.env.NODE_ENV !== 'production') {
+      shouldPoll = true;
+    } else {
+      shouldPoll = isFirstInstance;
+    }
+  }
 
   bot = new TelegramBot(token, { polling: shouldPoll });
   if (shouldPoll) {
-    console.log('Telegram bot initialized and polling.');
+    console.log(`[Telegram Bot] Initialized and polling. (NODE_APP_INSTANCE: ${process.env.NODE_APP_INSTANCE || '0'})`);
   } else {
-    console.log('Telegram bot initialized (polling disabled).');
+    console.log(`[Telegram Bot] Initialized (polling disabled). (NODE_APP_INSTANCE: ${process.env.NODE_APP_INSTANCE || 'none'})`);
   }
 
   // Create logs directory if it doesn't exist
@@ -135,10 +147,13 @@ const initBot = () => {
     fs.appendFileSync(logFile, logLine);
   };
 
+  console.log('[Telegram Bot] Registering /start command listener...');
   bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const startParam = match && match[1] ? match[1].trim() : null;
+    
+    console.log(`📥 [Telegram Bot] Received /start command from User: ${userId}, Chat: ${chatId}, startParam: "${startParam || ''}"`);
 
     const activeSession = await getActiveSessionForUser(userId, startParam);
     if (!activeSession) {
@@ -161,10 +176,12 @@ const initBot = () => {
   });
 
   // Handle /done command
+  console.log('[Telegram Bot] Registering /done message listener...');
   bot.on('message', async (msg) => {
     if (msg.text && msg.text.trim() === '/done') {
       const chatId = msg.chat.id;
       const userId = msg.from.id;
+      console.log(`📥 [Telegram Bot] Received message in /done listener: Chat: ${chatId}, User: ${userId}, Text: "${msg.text || ''}"`);
 
       const activeSession = await getActiveSessionForUser(userId);
       if (!activeSession) {
@@ -203,17 +220,19 @@ const initBot = () => {
   });
 
   // Handle various file types
+  console.log('[Telegram Bot] Registering file upload message listener...');
   bot.on('message', async (msg) => {
-    // Ignore commands
-    if (msg.text && msg.text.startsWith('/')) return;
-
     // Only process actual files/photos/videos/etc.
     if (!msg.document && !msg.video && !msg.audio && (!msg.photo || msg.photo.length === 0) && !msg.voice) {
       return;
     }
 
+    // Ignore commands
+    if (msg.text && msg.text.startsWith('/')) return;
+
     const chatId = msg.chat.id;
     const userId = msg.from.id;
+    console.log(`📥 [Telegram Bot] Received message in file upload listener: Chat: ${chatId}, User: ${userId}, Has document: ${!!msg.document}, Has video: ${!!msg.video}`);
 
     const activeSession = await getActiveSessionForUser(userId);
     if (!activeSession) {
