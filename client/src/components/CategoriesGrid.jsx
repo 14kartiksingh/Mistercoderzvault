@@ -66,10 +66,7 @@ const CategoriesGrid = ({ isAdmin }) => {
               onClick={() => navigate(isAdmin ? `/admin/category/${category.slug}` : `/category/${category.slug}`)}
               className="bg-surface-elevated border border-border-subtle p-4 flex flex-col gap-3 hover:border-primary/50 transition-all duration-200 cursor-pointer group hover:scale-[1.02] rounded-sm active:scale-95 text-left"
             >
-              <div className="flex justify-between items-start select-none">
-                <span className="font-label-mono text-[9px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-sm font-bold uppercase tracking-wider">
-                  CAT
-                </span>
+              <div className="flex justify-end items-start select-none">
                 <span className="font-label-mono text-[9px] text-text-muted bg-surface-container px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-bold">
                   {count} FILE{count !== 1 ? 'S' : ''}
                 </span>
