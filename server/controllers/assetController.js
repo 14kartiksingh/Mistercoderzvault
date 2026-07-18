@@ -501,6 +501,74 @@ const getAssetStats = async (req, res) => {
     return sendError(res, 'Failed to fetch asset stats', 500);
   }
 };
+/**
+ * Delete a specific file from an asset
+ */
+const deleteAssetFile = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+
+    // 1. Fetch AssetFile and include parent Asset
+    const assetFile = await prisma.assetFile.findUnique({
+      where: { id: fileId },
+      include: { asset: { include: { files: true } } }
+    });
+
+    if (!assetFile) {
+      return sendError(res, 'File not found', 404);
+    }
+
+    const { asset, telegramMessageId } = assetFile;
+
+    // 2. Delete from Telegram using MTProto
+    if (telegramMessageId) {
+      let client = getTelegramClient();
+      if (!client) {
+        client = await initTelegramClient();
+      }
+      
+      if (client) {
+        const channelId = process.env.TELEGRAM_STORAGE_CHANNEL_ID;
+        if (!channelId) {
+          return sendError(res, 'Storage channel is not configured on the backend', 500);
+        }
+
+        try {
+          const channelEntity = await client.getEntity(channelId);
+          await client.deleteMessages(channelEntity, [telegramMessageId], { revoke: true });
+        } catch (telegramError) {
+          console.error('Failed to delete message from Telegram:', telegramError);
+          return sendError(res, 'Failed to delete file from Telegram storage', 500);
+        }
+      }
+    }
+
+    // 3. Delete from Database using Transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete the file
+      await tx.assetFile.delete({ where: { id: fileId } });
+      
+      // If it was the last file, soft delete the asset
+      if (asset.files.length === 1) {
+        await tx.asset.update({
+          where: { id: asset.id },
+          data: { isDeleted: true, sizeBytes: 0n }
+        });
+      } else {
+        // Otherwise, update the asset size
+        await tx.asset.update({
+          where: { id: asset.id },
+          data: { sizeBytes: asset.sizeBytes - assetFile.fileSize }
+        });
+      }
+    });
+
+    return sendSuccess(res, { message: 'File successfully deleted', isAssetDeleted: asset.files.length === 1 });
+  } catch (error) {
+    console.error('Error deleting asset file:', error);
+    return sendError(res, 'Failed to delete asset file', 500);
+  }
+};
 
 module.exports = {
   getAssets,
@@ -511,4 +579,5 @@ module.exports = {
   downloadAsset,
   downloadFile,
   getAssetStats,
+  deleteAssetFile,
 };

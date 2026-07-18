@@ -111,7 +111,7 @@ const StatusBadge = ({ status }) => {
   return null;
 };
 
-const TreeNode = ({ node, downloadStatuses, onIndividualDownload }) => {
+const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onIndividualDelete, deletingFileId }) => {
   const [isOpen, setIsOpen] = useState(true);
   
   if (node.isFolder) {
@@ -134,6 +134,9 @@ const TreeNode = ({ node, downloadStatuses, onIndividualDownload }) => {
                 node={child} 
                 downloadStatuses={downloadStatuses} 
                 onIndividualDownload={onIndividualDownload}
+                isAdmin={isAdmin}
+                onIndividualDelete={onIndividualDelete}
+                deletingFileId={deletingFileId}
               />
             ))}
           </div>
@@ -152,13 +155,27 @@ const TreeNode = ({ node, downloadStatuses, onIndividualDownload }) => {
           <span className="text-[9px] font-label-mono text-text-muted/50 bg-surface-container px-1.5 py-0.5 rounded shrink-0">{sizeFormatted}</span>
           <StatusBadge status={status} />
         </div>
-        <button 
-          onClick={() => onIndividualDownload(node.file)}
-          className="text-primary hover:text-primary-hover hover:scale-105 active:scale-95 flex items-center justify-center p-1 transition-all"
-          title="Download file part"
-        >
-          <span className="material-symbols-outlined text-[18px]">download</span>
-        </button>
+        <div className="flex items-center gap-1">
+          {isAdmin && (
+            <button 
+              onClick={() => onIndividualDelete(node.file)}
+              disabled={deletingFileId === node.file.id}
+              className={`text-error hover:text-error-hover flex items-center justify-center p-1 transition-all ${deletingFileId === node.file.id ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+              title="Delete file"
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {deletingFileId === node.file.id ? 'hourglass_empty' : 'delete'}
+              </span>
+            </button>
+          )}
+          <button 
+            onClick={() => onIndividualDownload(node.file)}
+            className="text-primary hover:text-primary-hover hover:scale-105 active:scale-95 flex items-center justify-center p-1 transition-all"
+            title="Download file part"
+          >
+            <span className="material-symbols-outlined text-[18px]">download</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -175,6 +192,8 @@ function DownloadAsset({ isAdmin }) {
   const [showReportModal, setShowReportModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState(null);
   const [assetToDelete, setAssetToDelete] = useState(null);
+  const [fileToDelete, setFileToDelete] = useState(null);
+  const [deletingFileId, setDeletingFileId] = useState(null);
 
   const [downloadStatuses, setDownloadStatuses] = useState({});
 
@@ -286,6 +305,38 @@ function DownloadAsset({ isAdmin }) {
       }
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const confirmDeleteFile = async () => {
+    if (!fileToDelete) return;
+    setDeletingFileId(fileToDelete.id);
+    const id = fileToDelete.id;
+    setFileToDelete(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/assets/file/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        if (data.data?.isAssetDeleted) {
+          navigate(isAdmin ? '/admin' : '/');
+        } else {
+          fetchAsset();
+        }
+      } else {
+        alert(data.message || 'Failed to delete file');
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDeletingFileId(null);
     }
   };
 
@@ -495,13 +546,27 @@ function DownloadAsset({ isAdmin }) {
                           <span className="font-label-mono text-[10px] text-text-muted/60 shrink-0">{formatBytes(Number(file.fileSize))}</span>
                           <StatusBadge status={status} />
                         </div>
-                        <button 
-                          onClick={() => handleIndividualDownload(file)}
-                          className="text-primary hover:text-primary-hover flex items-center justify-center p-1"
-                          title={`Download Part ${file.partNumber || idx + 1}`}
-                        >
-                          <span className="material-symbols-outlined text-[18px]">download</span>
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {isAdmin && (
+                            <button 
+                              onClick={() => setFileToDelete(file)}
+                              disabled={deletingFileId === file.id}
+                              className={`text-error hover:text-error-hover flex items-center justify-center p-1 rounded transition-all ${deletingFileId === file.id ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+                              title={`Delete Part ${file.partNumber || idx + 1}`}
+                            >
+                              <span className="material-symbols-outlined text-[18px]">
+                                {deletingFileId === file.id ? 'hourglass_empty' : 'delete'}
+                              </span>
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => handleIndividualDownload(file)}
+                            className="text-primary hover:text-primary-hover hover:scale-105 active:scale-95 flex items-center justify-center p-1 transition-all"
+                            title={`Download Part ${file.partNumber || idx + 1}`}
+                          >
+                            <span className="material-symbols-outlined text-[18px]">download</span>
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -519,6 +584,9 @@ function DownloadAsset({ isAdmin }) {
                           node={child} 
                           downloadStatuses={downloadStatuses} 
                           onIndividualDownload={handleIndividualDownload}
+                          isAdmin={isAdmin}
+                          onIndividualDelete={(file) => setFileToDelete(file)}
+                          deletingFileId={deletingFileId}
                         />
                       ))}
                     </div>
@@ -721,6 +789,30 @@ function DownloadAsset({ isAdmin }) {
                 </button>
                 <button 
                   onClick={confirmDelete}
+                  className="flex-1 py-2.5 rounded-sm font-label-mono text-xs font-bold transition-all bg-error text-white hover:bg-error/90 shadow-lg"
+                >
+                  DELETE
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Delete File Confirmation Modal */}
+        {fileToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+            <div className="bg-surface-base border border-border-subtle rounded p-6 w-full max-w-sm shadow-2xl flex flex-col animate-fade-in">
+              <h2 className="text-xl font-bold text-text-high-contrast mb-2">Delete File</h2>
+              <p className="text-xs text-text-muted mb-6">Are you sure you want to permanently delete "{fileToDelete.fileName}"? This will remove the file from Telegram storage and cannot be undone.</p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setFileToDelete(null)}
+                  className="flex-1 py-2.5 rounded-sm font-label-mono text-xs font-medium transition-colors bg-surface-elevated text-text-muted hover:text-text-high-contrast border border-border-subtle"
+                >
+                  CANCEL
+                </button>
+                <button 
+                  onClick={confirmDeleteFile}
                   className="flex-1 py-2.5 rounded-sm font-label-mono text-xs font-bold transition-all bg-error text-white hover:bg-error/90 shadow-lg"
                 >
                   DELETE

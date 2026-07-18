@@ -11,6 +11,7 @@ router.get('/:id/download', assetController.downloadAsset);
 router.get('/file/:fileId/download', assetController.downloadFile);
 router.post('/', requireAuth, assetController.createAsset);
 router.put('/:id', requireAuth, assetController.updateAsset);
+router.delete('/file/:fileId', requireAuth, assetController.deleteAssetFile);
 router.delete('/:id', requireAuth, assetController.deleteAsset);
 
 module.exports = router;
