@@ -7,7 +7,8 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && node --watch index.js",
     "dev:client": "cd client && npm run dev",
-    "db:check": "cd server && node scripts/db-check.js"
+    "db:check": "cd server && node scripts/db-check.js",
+    "db:push": "cd server && node scripts/db-push.js"
   },
   "keywords": [],
   "author": "",
