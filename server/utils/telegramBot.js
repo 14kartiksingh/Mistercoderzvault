@@ -6,42 +6,104 @@ const token = process.env.TELEGRAM_BOT_TOKEN;
 const storageChannelId = process.env.TELEGRAM_STORAGE_CHANNEL_ID;
 let bot = null;
 
-let currentUploadId = null;
-let currentMetadata = null;
-let currentTelegramUserId = null; // Dynamically bound on first message/file during session
-const completedUploads = new Set();
-
-const setCurrentUploadId = (id, metadata) => {
-  currentUploadId = id;
-  currentMetadata = metadata;
-  currentTelegramUserId = null;
+const setCurrentUploadId = async (id, metadata) => {
+  // Deactivate any existing active sessions to prevent state leakage
+  await prisma.uploadSession.deleteMany({
+    where: { status: 'waiting' }
+  });
+  // Create a new session in the database
+  await prisma.uploadSession.create({
+    data: {
+      id: id,
+      metadata: metadata || {},
+      status: 'waiting',
+      telegramUserId: null
+    }
+  });
+  console.log(`[UploadSession] Started session ${id}`);
 };
 
-const markUploadComplete = (id) => {
+const markUploadComplete = async (id) => {
   if (id) {
-    completedUploads.add(id);
+    await prisma.uploadSession.updateMany({
+      where: { id },
+      data: { status: 'complete' }
+    });
+    console.log(`[UploadSession] Marked session ${id} as complete`);
   }
 };
 
-const checkUploadStatus = (id) => {
-  if (completedUploads.has(id)) {
-    completedUploads.delete(id); // Cleanup after reading
+const checkUploadStatus = async (id) => {
+  const session = await prisma.uploadSession.findUnique({
+    where: { id }
+  });
+  if (session && session.status === 'complete') {
+    try {
+      await prisma.uploadSession.delete({ where: { id } });
+    } catch (err) {}
     return 'complete';
   }
   return 'waiting';
 };
 
-const getActiveAssetId = (id) => {
-  if (currentUploadId === id && currentMetadata) {
-    return currentMetadata.assetId || null;
+const getActiveAssetId = async (id) => {
+  const session = await prisma.uploadSession.findUnique({
+    where: { id }
+  });
+  if (session && session.metadata) {
+    const metadata = typeof session.metadata === 'string' ? JSON.parse(session.metadata) : session.metadata;
+    return metadata.assetId || null;
   }
   return null;
 };
 
-const clearSession = () => {
-  currentUploadId = null;
-  currentMetadata = null;
-  currentTelegramUserId = null;
+const clearSession = async () => {
+  await prisma.uploadSession.deleteMany({
+    where: { status: 'waiting' }
+  });
+  console.log(`[UploadSession] Cleared all active waiting sessions`);
+};
+
+// Helper to check/bind Telegram User ID to active session
+const getActiveSessionForUser = async (msgUserId, startParam = null) => {
+  if (startParam) {
+    const session = await prisma.uploadSession.findFirst({
+      where: { id: startParam, status: 'waiting' }
+    });
+    if (session) {
+      if (!session.telegramUserId) {
+        const updated = await prisma.uploadSession.update({
+          where: { id: session.id },
+          data: { telegramUserId: String(msgUserId) }
+        });
+        return updated;
+      }
+      if (session.telegramUserId === String(msgUserId)) {
+        return session;
+      }
+      return null;
+    }
+  }
+
+  const boundSession = await prisma.uploadSession.findFirst({
+    where: { telegramUserId: String(msgUserId), status: 'waiting' },
+    orderBy: { createdAt: 'desc' }
+  });
+  if (boundSession) return boundSession;
+
+  const unboundSession = await prisma.uploadSession.findFirst({
+    where: { telegramUserId: null, status: 'waiting' },
+    orderBy: { createdAt: 'desc' }
+  });
+  if (unboundSession) {
+    const updated = await prisma.uploadSession.update({
+      where: { id: unboundSession.id },
+      data: { telegramUserId: String(msgUserId) }
+    });
+    return updated;
+  }
+
+  return null;
 };
 
 const initBot = () => {
@@ -73,37 +135,29 @@ const initBot = () => {
     fs.appendFileSync(logFile, logLine);
   };
 
-  const isAuthorized = (msgUserId) => {
-    // If no session is active, unauthorized
-    if (!currentUploadId) return false;
-
-    // Dynamically bind to the first user sending a message/file
-    if (!currentTelegramUserId) {
-      currentTelegramUserId = String(msgUserId);
-      console.log(`[Telegram Auth] Dynamically bound active session ${currentUploadId} to Telegram User ID: ${msgUserId}`);
-      return true;
-    }
-
-    // Must match the bound user
-    return String(msgUserId) === currentTelegramUserId;
-  };
-
-  bot.onText(/^\/start$/, (msg) => {
+  bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
+    const startParam = match && match[1] ? match[1].trim() : null;
 
-    if (!currentUploadId) {
-      bot.sendMessage(chatId, '❌ No active upload session.\n\nPlease start an upload from the Vault Admin Panel first.');
+    const activeSession = await getActiveSessionForUser(userId, startParam);
+    if (!activeSession) {
+      const anyActive = await prisma.uploadSession.findFirst({
+        where: { status: 'waiting' }
+      });
+      if (!anyActive) {
+        bot.sendMessage(chatId, '❌ No active upload session.\n\nPlease start an upload from the Vault Admin Panel first.');
+      } else {
+        bot.sendMessage(chatId, '❌ Unauthorized.\n\nThis upload session is already in use by another administrator.');
+      }
       return;
     }
 
-    if (!isAuthorized(userId)) {
-      console.log(`[Telegram Auth] Session ${currentUploadId} already bound to another user. Rejecting User ID: ${userId}`);
-      bot.sendMessage(chatId, '❌ Unauthorized.\n\nThis upload session is already in use by another administrator.');
-      return;
-    }
+    const metadata = typeof activeSession.metadata === 'string'
+      ? JSON.parse(activeSession.metadata)
+      : activeSession.metadata;
 
-    bot.sendMessage(chatId, 'Welcome to MISTER CODERZ Vault.\n\nSend me the file you want to upload.');
+    bot.sendMessage(chatId, `Welcome to MISTER CODERZ Vault.\n\nActive Upload Session: "${metadata.title || 'Untitled'}" (${metadata.uploadType || 'SINGLE'}).\n\nSend me the file(s) you want to upload.`);
   });
 
   // Handle /done command
@@ -112,17 +166,24 @@ const initBot = () => {
       const chatId = msg.chat.id;
       const userId = msg.from.id;
 
-      if (!currentUploadId) {
-        bot.sendMessage(chatId, '❌ No active upload session.');
+      const activeSession = await getActiveSessionForUser(userId);
+      if (!activeSession) {
+        const anyActive = await prisma.uploadSession.findFirst({
+          where: { status: 'waiting' }
+        });
+        if (!anyActive) {
+          bot.sendMessage(chatId, '❌ No active upload session.');
+        } else {
+          bot.sendMessage(chatId, '❌ Unauthorized.\n\nThis upload session is already in use by another administrator.');
+        }
         return;
       }
 
-      if (!isAuthorized(userId)) {
-        bot.sendMessage(chatId, '❌ Unauthorized.\n\nThis upload session is already in use by another administrator.');
-        return;
-      }
+      const metadata = typeof activeSession.metadata === 'string'
+        ? JSON.parse(activeSession.metadata)
+        : activeSession.metadata;
 
-      const assetId = currentMetadata.assetId;
+      const assetId = metadata.assetId;
       try {
         if (assetId) {
           await prisma.asset.update({
@@ -130,9 +191,9 @@ const initBot = () => {
             data: { isPending: false }
           });
         }
-        markUploadComplete(currentUploadId);
-        const name = currentMetadata.title || 'Upload';
-        clearSession();
+        await markUploadComplete(activeSession.id);
+        const name = metadata.title || 'Upload';
+        await clearSession();
         bot.sendMessage(chatId, `✅ Upload finished manually.\n\nAsset "${name}" is now available in the Vault.`);
       } catch (error) {
         console.error('Error in /done command:', error);
@@ -146,24 +207,30 @@ const initBot = () => {
     // Ignore commands
     if (msg.text && msg.text.startsWith('/')) return;
 
+    // Only process actual files/photos/videos/etc.
+    if (!msg.document && !msg.video && !msg.audio && (!msg.photo || msg.photo.length === 0) && !msg.voice) {
+      return;
+    }
+
     const chatId = msg.chat.id;
     const userId = msg.from.id;
 
-    if (!currentUploadId) {
-      bot.sendMessage(chatId, '❌ No active upload session.\n\nPlease start an upload from the Vault Admin Panel first.');
+    const activeSession = await getActiveSessionForUser(userId);
+    if (!activeSession) {
+      const anyActive = await prisma.uploadSession.findFirst({
+        where: { status: 'waiting' }
+      });
+      if (!anyActive) {
+        bot.sendMessage(chatId, '❌ No active upload session.\n\nPlease start an upload from the Vault Admin Panel first.');
+      } else {
+        bot.sendMessage(chatId, '❌ Unauthorized.\n\nThis upload session is already in use by another administrator.');
+      }
       return;
     }
 
-    // Check authorization first
-    if (!isAuthorized(userId)) {
-      console.log(`[Telegram Auth] Unauthorized upload attempt from User ID: ${userId}`);
-      bot.sendMessage(chatId, '❌ Unauthorized.\n\nThis upload session is already in use by another administrator.');
-      return;
-    }
-
-    // Extract file info
-    let fileObj = null;
-    let fileName = 'Unknown';
+    const currentMetadata = typeof activeSession.metadata === 'string'
+      ? JSON.parse(activeSession.metadata)
+      : activeSession.metadata;
     
     if (msg.document) {
       fileObj = msg.document;
@@ -376,9 +443,9 @@ const initBot = () => {
                   data: { isPending: false }
                 });
                 
-                markUploadComplete(currentUploadId);
+                await markUploadComplete(activeSession.id);
                 const assetName = currentMetadata.title || 'Asset';
-                clearSession();
+                await clearSession();
                 
                 bot.sendMessage(chatId, `✅ All files uploaded successfully! (${uploadedCount}/${totalFiles})\n\nAsset "${assetName}" is now available in the Vault.`);
               } else {
@@ -415,5 +482,6 @@ module.exports = {
   checkUploadStatus,
   markUploadComplete,
   getActiveAssetId,
-  clearSession
+  clearSession,
+  getActiveSessionForUser
 };

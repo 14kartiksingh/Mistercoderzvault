@@ -1,5 +1,7 @@
 const { TelegramClient } = require('telegram');
 const { StringSession } = require('telegram/sessions');
+const fs = require('fs');
+const path = require('path');
 
 const apiId = process.env.TELEGRAM_API_ID ? parseInt(process.env.TELEGRAM_API_ID, 10) : null;
 const apiHash = process.env.TELEGRAM_API_HASH;
@@ -8,8 +10,10 @@ const botToken = process.env.TELEGRAM_BOT_TOKEN;
 let client = null;
 let clientInitPromise = null;
 
+const sessionFilePath = path.join(__dirname, '..', 'session.txt');
+
 /**
- * Initializes and starts the Telegram MTProto client using a bot token
+ * Initializes and starts the Telegram MTProto client using a bot token and persisting session
  */
 const initTelegramClient = async () => {
   if (client) return client;
@@ -27,16 +31,42 @@ const initTelegramClient = async () => {
 
     try {
       console.log('[Telegram MTProto] Initializing Telegram Client (MTProto)...');
-      client = new TelegramClient(new StringSession(''), apiId, apiHash, {
+      
+      // Load saved session if it exists
+      let savedSession = '';
+      if (fs.existsSync(sessionFilePath)) {
+        try {
+          savedSession = fs.readFileSync(sessionFilePath, 'utf8').trim();
+          console.log('[Telegram MTProto] Loaded saved session from session.txt');
+        } catch (e) {
+          console.warn('[Telegram MTProto] Could not read session.txt, starting fresh session');
+        }
+      }
+
+      const stringSession = new StringSession(savedSession);
+      client = new TelegramClient(stringSession, apiId, apiHash, {
         connectionRetries: 5,
-        useWSSecure: true, // Secure WebSocket connection
+        useWSSecure: true,
       });
 
+      // Start client. If session is valid, client.start will bypass ImportBotAuthorization.
       await client.start({
         botAuthToken: botToken,
       });
 
       console.log('✅ [Telegram MTProto] Client authenticated and connected successfully.');
+      
+      // Save session if it was newly created or updated
+      try {
+        const currentSession = client.session.save();
+        if (currentSession !== savedSession) {
+          fs.writeFileSync(sessionFilePath, currentSession, 'utf8');
+          console.log('[Telegram MTProto] Saved authenticated session to session.txt');
+        }
+      } catch (saveError) {
+        console.error('[Telegram MTProto] Failed to save session string:', saveError);
+      }
+
       return client;
     } catch (error) {
       console.error('❌ [Telegram MTProto] Failed to initialize/start Telegram Client:', error);

@@ -76,8 +76,8 @@ router.post('/upload-start', requireAuth, async (req, res) => {
         }
       });
 
-      // Store in memory
-      setCurrentUploadId(uploadId, {
+      // Store in database
+      await setCurrentUploadId(uploadId, {
         ...metadata,
         assetId: newAsset.id
       });
@@ -89,7 +89,7 @@ router.post('/upload-start', requireAuth, async (req, res) => {
     }
   } else {
     // SINGLE upload: keep existing deferred creation
-    setCurrentUploadId(uploadId, {
+    await setCurrentUploadId(uploadId, {
       ...metadata,
       uploadType: 'SINGLE'
     });
@@ -101,9 +101,9 @@ router.post('/upload-start', requireAuth, async (req, res) => {
  * Check upload status
  * GET /api/telegram/status/:uploadId
  */
-router.get('/status/:uploadId', requireAuth, (req, res) => {
+router.get('/status/:uploadId', requireAuth, async (req, res) => {
   const { uploadId } = req.params;
-  const status = checkUploadStatus(uploadId);
+  const status = await checkUploadStatus(uploadId);
   return res.json({ status });
 });
 
@@ -113,7 +113,7 @@ router.get('/status/:uploadId', requireAuth, (req, res) => {
  */
 router.post('/upload-finish/:uploadId', requireAuth, async (req, res) => {
   const { uploadId } = req.params;
-  const assetId = getActiveAssetId(uploadId);
+  const assetId = await getActiveAssetId(uploadId);
   
   try {
     if (assetId) {
@@ -123,8 +123,8 @@ router.post('/upload-finish/:uploadId', requireAuth, async (req, res) => {
         data: { isPending: false }
       });
     }
-    markUploadComplete(uploadId);
-    clearSession();
+    await markUploadComplete(uploadId);
+    await clearSession();
     return sendSuccess(res, { message: 'Upload successfully finished' });
   } catch (error) {
     console.error('Error finishing upload session:', error);
@@ -138,7 +138,7 @@ router.post('/upload-finish/:uploadId', requireAuth, async (req, res) => {
  */
 router.post('/upload-cancel/:uploadId', requireAuth, async (req, res) => {
   const { uploadId } = req.params;
-  const assetId = getActiveAssetId(uploadId);
+  const assetId = await getActiveAssetId(uploadId);
 
   try {
     if (assetId) {
@@ -159,7 +159,7 @@ router.post('/upload-cancel/:uploadId', requireAuth, async (req, res) => {
         console.log(`[Cancel Upload] Cleaned up pending database records for Asset ID: ${assetId}`);
       }
     }
-    clearSession();
+    await clearSession();
     return sendSuccess(res, { message: 'Upload successfully cancelled' });
   } catch (error) {
     console.error('Error cancelling upload session:', error);

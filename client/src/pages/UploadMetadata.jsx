@@ -90,7 +90,7 @@ function UploadMetadata() {
       setUploadState('uploading');
 
       // Open Telegram
-      const botUrl = `https://t.me/${import.meta.env.VITE_TELEGRAM_BOT_USERNAME}`;
+      const botUrl = `https://t.me/${import.meta.env.VITE_TELEGRAM_BOT_USERNAME}?start=${newUploadId}`;
       window.open(botUrl, '_blank', 'noopener,noreferrer');
 
       // Start Polling
