@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AssetCard from '../components/AssetCard';
+import EditAssetModal from '../components/EditAssetModal';
 
 const formatBytes = (bytes) => {
   if (bytes === 0) return '0 Bytes';
@@ -22,17 +23,6 @@ const formatTimeAgo = (dateString) => {
   if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}M_AGO`;
   if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}H_AGO`;
   return `${Math.floor(diffInSeconds / 86400)}D_AGO`;
-};
-
-const getIconForCategory = (categoryName) => {
-  const name = categoryName ? categoryName.toUpperCase() : '';
-  if (name.includes('GAME')) return 'sports_esports';
-  if (name.includes('MOVIE')) return 'movie';
-  if (name.includes('APP')) return 'developer_mode_tv';
-  if (name.includes('SOFT')) return 'terminal';
-  if (name.includes('BOOK')) return 'book';
-  if (name.includes('MUSIC')) return 'album';
-  return 'draft';
 };
 
 const getInitials = (name) => {
@@ -176,12 +166,15 @@ const TreeNode = ({ node, downloadStatuses, onIndividualDownload }) => {
 
 function DownloadAsset({ isAdmin }) {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [asset, setAsset] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [relatedAssets, setRelatedAssets] = useState([]);
   const [toast, setToast] = useState('');
   const [showReportModal, setShowReportModal] = useState(false);
+  const [editingAsset, setEditingAsset] = useState(null);
+  const [assetToDelete, setAssetToDelete] = useState(null);
 
   const [downloadStatuses, setDownloadStatuses] = useState({});
 
@@ -236,8 +229,6 @@ function DownloadAsset({ isAdmin }) {
     fetchRelated();
   }, [asset]);
 
-
-
   const handleIndividualDownload = (file) => {
     setDownloadStatuses(prev => ({ ...prev, [file.id]: 'active' }));
     
@@ -275,6 +266,27 @@ function DownloadAsset({ isAdmin }) {
     setShowReportModal(false);
     setToast('REPORT_SUBMITTED');
     setTimeout(() => setToast(''), 3000);
+  };
+
+  const confirmDelete = async () => {
+    if (!assetToDelete) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/assets/${assetToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        setAssetToDelete(null);
+        navigate(isAdmin ? '/admin' : '/');
+      } else {
+        alert('Failed to delete asset');
+      }
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   if (loading) {
@@ -330,7 +342,6 @@ function DownloadAsset({ isAdmin }) {
   const categoryName = asset.category?.name || 'UNKNOWN';
   const sizeFormatted = asset.sizeBytes ? formatBytes(Number(asset.sizeBytes)) : 'Unknown';
   const timeFormatted = formatTimeAgo(asset.createdAt);
-  const icon = getIconForCategory(categoryName);
   const initials = getInitials(asset.name);
   const filesList = asset.files || [];
   const sortedFiles = [...filesList].sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
@@ -339,8 +350,6 @@ function DownloadAsset({ isAdmin }) {
   // Check if any file metadata is missing Telegram fields
   const missingFiles = filesList.filter(f => !f.telegramMessageId);
   const hasMetadataIssues = missingFiles.length > 0;
-
-
 
   return (
     <>
@@ -371,7 +380,6 @@ function DownloadAsset({ isAdmin }) {
               ) : (
                 <div className="w-24 h-24 sm:w-28 sm:h-28 bg-gradient-to-br from-surface-variant to-surface-dim flex flex-col items-center justify-center border border-border-subtle shrink-0 rounded-sm relative self-center sm:self-start select-none">
                   <span className="font-label-mono text-sm font-bold text-text-high-contrast/70 tracking-wider">{initials}</span>
-                  <span className="material-symbols-outlined text-primary text-[24px] absolute bottom-2 right-2 opacity-80" data-icon={icon}>{icon}</span>
                 </div>
               )}
               
@@ -429,9 +437,9 @@ function DownloadAsset({ isAdmin }) {
               <div className="bg-primary/10 border border-primary/20 p-4 rounded-sm flex items-start gap-3">
                 <span className="material-symbols-outlined text-primary text-[20px] select-none">info</span>
                 <div>
-                  <h4 className="text-xs font-bold text-text-high-contrast font-label-mono uppercase tracking-wider font-semibold">Folder Directory Details</h4>
+                  <h4 className="text-xs font-bold text-text-high-contrast font-label-mono uppercase tracking-wider font-semibold">Folder Category Details</h4>
                   <p className="text-xs text-text-muted mt-1 leading-relaxed">
-                    Please browse the files inside this directory and download them individually using the buttons below.
+                    Please browse the files inside this category and download them individually using the buttons below.
                   </p>
                 </div>
               </div>
@@ -452,8 +460,6 @@ function DownloadAsset({ isAdmin }) {
                   {filesList.length} FILE{filesList.length !== 1 ? 'S' : ''}
                 </span>
               </div>
-
-
 
               {/* Single File Structure Layout */}
               {asset.uploadType === 'SINGLE' && (
@@ -517,32 +523,10 @@ function DownloadAsset({ isAdmin }) {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-text-muted text-xs font-label-mono text-center py-6">NO DIRECTORY METADATA RETRIEVED</div>
+                    <div className="text-text-muted text-xs font-label-mono text-center py-6">NO CATEGORY METADATA RETRIEVED</div>
                   )}
                 </div>
               )}
-            </div>
-
-            {/* Future Expansions Area */}
-            <div className="bg-surface-elevated border border-border-subtle p-5 rounded-sm flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-border-subtle/50 pb-2 select-none">
-                <span className="font-label-mono text-[9px] text-text-muted uppercase tracking-wider">Extended Information</span>
-                <span className="font-label-mono text-[9px] text-text-muted bg-surface px-2 py-0.5 rounded-sm">V1.0</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs font-label-mono">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] text-text-muted">VERSION</span>
-                  <span className="text-text-high-contrast">1.0.0 (STABLE)</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] text-text-muted">MD5_HASH</span>
-                  <span className="text-text-high-contrast truncate font-sans">N/A</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] text-text-muted">LICENSE</span>
-                  <span className="text-text-high-contrast">FREEWARE</span>
-                </div>
-              </div>
             </div>
 
           </div>
@@ -598,37 +582,53 @@ function DownloadAsset({ isAdmin }) {
                   <span className="text-[9px] font-label-mono text-text-muted select-none">Report</span>
                 </button>
               </div>
+
+              {/* Admin Edit/Delete Options - ONLY visible on Details page when logged in */}
+              {isAdmin && (
+                <div className="flex gap-2 w-full mt-4 pt-4 border-t border-border-subtle/30">
+                  <button 
+                    onClick={() => setEditingAsset(asset)}
+                    className="flex-1 bg-surface border border-border-subtle hover:border-primary text-text-high-contrast hover:text-primary py-2.5 rounded-sm font-label-mono text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">edit</span>
+                    EDIT
+                  </button>
+                  <button 
+                    onClick={() => setAssetToDelete(asset)}
+                    className="flex-1 bg-surface border border-error/50 text-error hover:bg-error/10 py-2.5 rounded-sm font-label-mono text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                    DELETE
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Sidebar Metadata Cards Block */}
-            <div className="bg-surface-elevated border border-border-subtle p-5 rounded-sm flex flex-col gap-4 select-none">
-              <h3 className="font-label-mono text-[10px] text-text-muted uppercase tracking-wider border-b border-border-subtle/50 pb-2">
-                Metadata Details
+            {/* Sidebar Metadata Cards Block - Redesigned cleanly without icons */}
+            <div className="bg-surface-elevated border border-border-subtle p-6 rounded-sm flex flex-col gap-5 select-none animate-fade-in">
+              <h3 className="font-label-mono text-[10px] text-primary font-bold uppercase tracking-wider border-b border-border-subtle pb-3">
+                Asset Information
               </h3>
-              <div className="flex flex-col gap-3">
-                <div className="flex justify-between items-center text-xs font-label-mono">
-                  <span className="text-text-muted">CATEGORY</span>
-                  <span className="text-primary font-bold uppercase">{categoryName}</span>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1 border-b border-border-subtle/30 pb-3">
+                  <span className="font-label-mono text-[9px] text-text-muted uppercase tracking-wider">Category</span>
+                  <span className="text-sm font-bold text-text-high-contrast uppercase">{categoryName}</span>
                 </div>
-                <div className="flex justify-between items-center text-xs font-label-mono">
-                  <span className="text-text-muted">UPLOAD TYPE</span>
-                  <span className="text-text-high-contrast font-bold uppercase">{asset.uploadType}</span>
+                <div className="flex flex-col gap-1 border-b border-border-subtle/30 pb-3">
+                  <span className="font-label-mono text-[9px] text-text-muted uppercase tracking-wider">Upload Type</span>
+                  <span className="text-sm font-semibold text-text-high-contrast uppercase">{asset.uploadType}</span>
                 </div>
-                <div className="flex justify-between items-center text-xs font-label-mono">
-                  <span className="text-text-muted">STORAGE</span>
-                  <span className="text-text-high-contrast uppercase font-bold text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-sm">TELEGRAM VAULT</span>
+                <div className="flex flex-col gap-1 border-b border-border-subtle/30 pb-3">
+                  <span className="font-label-mono text-[9px] text-text-muted uppercase tracking-wider">Size</span>
+                  <span className="text-sm font-semibold text-text-high-contrast">{sizeFormatted}</span>
                 </div>
-                <div className="flex justify-between items-center text-xs font-label-mono">
-                  <span className="text-text-muted">FILES</span>
-                  <span className="text-text-high-contrast font-bold">{filesList.length}</span>
+                <div className="flex flex-col gap-1 border-b border-border-subtle/30 pb-3">
+                  <span className="font-label-mono text-[9px] text-text-muted uppercase tracking-wider">File Count</span>
+                  <span className="text-sm font-semibold text-text-high-contrast">{filesList.length} File{filesList.length !== 1 ? 's' : ''}</span>
                 </div>
-                <div className="flex justify-between items-center text-xs font-label-mono">
-                  <span className="text-text-muted">TOTAL SIZE</span>
-                  <span className="text-text-high-contrast font-bold">{sizeFormatted}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs font-label-mono">
-                  <span className="text-text-muted">UPLOADED</span>
-                  <span className="text-text-high-contrast font-bold">{timeFormatted}</span>
+                <div className="flex flex-col gap-1 pb-1">
+                  <span className="font-label-mono text-[9px] text-text-muted uppercase tracking-wider">Uploaded At</span>
+                  <span className="text-xs font-semibold text-text-high-contrast">{timeFormatted}</span>
                 </div>
               </div>
             </div>
@@ -652,8 +652,6 @@ function DownloadAsset({ isAdmin }) {
                   key={relAsset.id} 
                   asset={relAsset} 
                   isAdmin={isAdmin}
-                  onEdit={() => {}}
-                  onDelete={() => {}}
                 />
               ))}
             </div>
@@ -689,6 +687,43 @@ function DownloadAsset({ isAdmin }) {
                   className="flex-1 py-2.5 rounded-sm font-label-mono text-xs font-bold transition-all bg-primary text-background hover:bg-primary-hover shadow-lg"
                 >
                   CONFIRM
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Edit Modal */}
+        {editingAsset && (
+          <EditAssetModal 
+            isOpen={true} 
+            asset={editingAsset} 
+            onClose={() => setEditingAsset(null)}
+            onSuccess={() => {
+              setEditingAsset(null);
+              fetchAsset();
+            }}
+          />
+        )}
+
+        {/* Admin Delete Confirmation Modal */}
+        {assetToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+            <div className="bg-surface-base border border-border-subtle rounded p-6 w-full max-w-sm shadow-2xl flex flex-col">
+              <h2 className="text-xl font-bold text-text-high-contrast mb-2">Delete Asset</h2>
+              <p className="text-xs text-text-muted mb-6">Are you sure you want to permanently delete "{assetToDelete.name}"? The file will remain in Telegram, but the metadata will be destroyed.</p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setAssetToDelete(null)}
+                  className="flex-1 py-2.5 rounded-sm font-label-mono text-xs font-medium transition-colors bg-surface-elevated text-text-muted hover:text-text-high-contrast border border-border-subtle"
+                >
+                  CANCEL
+                </button>
+                <button 
+                  onClick={confirmDelete}
+                  className="flex-1 py-2.5 rounded-sm font-label-mono text-xs font-bold transition-all bg-error text-white hover:bg-error/90 shadow-lg"
+                >
+                  DELETE
                 </button>
               </div>
             </div>

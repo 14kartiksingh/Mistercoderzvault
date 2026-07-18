@@ -8,8 +8,24 @@ const EditAssetModal = ({ isOpen, asset, onClose, onSuccess }) => {
     tags: '',
     thumbnail: ''
   });
+  const [categories, setCategories] = useState([]);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch('/api/categories');
+        const data = await res.json();
+        if (data.status === 'success' && data.data) {
+          setCategories(data.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch categories', err);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     if (asset) {
@@ -112,13 +128,20 @@ const EditAssetModal = ({ isOpen, asset, onClose, onSuccess }) => {
               onChange={handleChange}
               className="w-full px-3 py-2 bg-surface-container border border-border-subtle rounded-xl text-text-high-contrast focus:outline-none focus:border-primary"
             >
-              <option>Games</option>
-              <option>Movies</option>
-              <option>Apps</option>
-              <option>Software</option>
-              <option>Books</option>
-              <option>Music</option>
-              <option>Other</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
+              ))}
+              {categories.length === 0 && (
+                <>
+                  <option>Games</option>
+                  <option>Movies</option>
+                  <option>Apps</option>
+                  <option>Software</option>
+                  <option>Books</option>
+                  <option>Music</option>
+                  <option>Other</option>
+                </>
+              )}
             </select>
           </div>
 

@@ -140,8 +140,6 @@ const CategoryBrowser = ({ isAdmin }) => {
                   key={asset.id} 
                   asset={asset} 
                   isAdmin={isAdmin}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
                 />
               ))}
             </div>

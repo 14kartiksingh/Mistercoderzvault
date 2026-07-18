@@ -8,7 +8,7 @@ const SearchBar = ({ value, onChange }) => {
       "Search your vault...",
       "Looking for 'Ubuntu ISO'?",
       "Query: 'Cyberpunk 2077'",
-      "Searching directories...",
+      "Searching categories...",
       "Type 'help' for command list"
     ];
     let index = 0;

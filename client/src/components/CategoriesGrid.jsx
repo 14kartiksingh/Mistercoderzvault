@@ -1,18 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const getIconForCategory = (categoryName) => {
-  const name = categoryName.toUpperCase();
-  if (name.includes('GAME')) return 'sports_esports';
-  if (name.includes('MOVIE')) return 'movie';
-  if (name.includes('APP')) return 'developer_mode_tv';
-  if (name.includes('SOFT')) return 'terminal';
-  if (name.includes('BOOK')) return 'book';
-  if (name.includes('MUSIC')) return 'album';
-  return 'draft';
-};
-
-const DirectoriesGrid = ({ isAdmin }) => {
+const CategoriesGrid = ({ isAdmin }) => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -66,29 +55,27 @@ const DirectoriesGrid = ({ isAdmin }) => {
   return (
     <section className="px-margin-mobile mb-section-gap">
       <div className="flex items-center justify-between mb-4 select-none">
-        <h2 className="font-headline-sm text-headline-sm text-text-high-contrast uppercase tracking-tighter">Directories</h2>
+        <h2 className="font-headline-sm text-headline-sm text-text-high-contrast uppercase tracking-tighter">Categories</h2>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
         {categories.map((category) => {
-          const icon = getIconForCategory(category.name);
           const count = category._count?.assets || 0;
           return (
             <div 
               key={category.id} 
               onClick={() => navigate(isAdmin ? `/admin/category/${category.slug}` : `/category/${category.slug}`)}
-              className="bg-surface-elevated border border-border-subtle p-4 flex flex-col gap-3 hover:border-primary/50 transition-all duration-200 cursor-pointer group hover:scale-[1.02] rounded-sm active:scale-95"
+              className="bg-surface-elevated border border-border-subtle p-4 flex flex-col gap-3 hover:border-primary/50 transition-all duration-200 cursor-pointer group hover:scale-[1.02] rounded-sm active:scale-95 text-left"
             >
               <div className="flex justify-between items-start select-none">
-                <span className="material-symbols-outlined text-primary text-xl select-none" data-icon={icon}>{icon}</span>
-                <span className="font-label-mono text-[9px] text-text-muted bg-surface-container px-1.5 py-0.5 rounded-sm">
-                  DIR
+                <span className="font-label-mono text-[9px] text-primary bg-primary/10 px-1.5 py-0.5 rounded-sm font-bold uppercase tracking-wider">
+                  CAT
+                </span>
+                <span className="font-label-mono text-[9px] text-text-muted bg-surface-container px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-bold">
+                  {count} FILE{count !== 1 ? 'S' : ''}
                 </span>
               </div>
               <div className="mt-1">
                 <div className="font-body-md font-bold text-text-high-contrast truncate text-sm">{category.name}</div>
-                <div className="font-label-mono text-[10px] text-text-muted group-hover:text-primary transition-colors uppercase mt-0.5 select-none">
-                  {count} FILE{count !== 1 ? 'S' : ''}
-                </div>
               </div>
             </div>
           );
@@ -98,4 +85,4 @@ const DirectoriesGrid = ({ isAdmin }) => {
   );
 };
 
-export default DirectoriesGrid;
+export default CategoriesGrid;

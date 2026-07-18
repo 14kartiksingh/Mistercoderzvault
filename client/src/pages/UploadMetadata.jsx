@@ -21,9 +21,26 @@ function UploadMetadata() {
     category: 'Games',
     uploadType: 'SINGLE'
   });
+  const [categories, setCategories] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [error, setError] = useState('');
   const pollingInterval = useRef(null);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch('/api/categories');
+        const data = await res.json();
+        if (data.status === 'success' && data.data && data.data.length > 0) {
+          setCategories(data.data);
+          setFormData(prev => ({ ...prev, category: data.data[0].name }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch categories', err);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -346,13 +363,20 @@ function UploadMetadata() {
                   onChange={handleChange}
                   className="w-full px-4 py-3 bg-surface-container border border-border-subtle rounded-xl text-text-high-contrast appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 >
-                  <option>Games</option>
-                  <option>Movies</option>
-                  <option>Apps</option>
-                  <option>Software</option>
-                  <option>Books</option>
-                  <option>Music</option>
-                  <option>Other</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  ))}
+                  {categories.length === 0 && (
+                    <>
+                      <option>Games</option>
+                      <option>Movies</option>
+                      <option>Apps</option>
+                      <option>Software</option>
+                      <option>Books</option>
+                      <option>Music</option>
+                      <option>Other</option>
+                    </>
+                  )}
                 </select>
                 <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" data-icon="expand_more">expand_more</span>
               </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import Header from './components/Header';
 import SearchBar from './components/SearchBar';
-import DirectoriesGrid from './components/DirectoriesGrid';
+import CategoriesGrid from './components/CategoriesGrid';
 import Footer from './components/Footer';
 import AdminLogin from './pages/AdminLogin';
 import ChangePassword from './pages/ChangePassword';
@@ -11,6 +11,7 @@ import CategoryBrowser from './pages/CategoryBrowser';
 import DownloadAsset from './pages/DownloadAsset';
 import AssetCard from './components/AssetCard';
 import EditAssetModal from './components/EditAssetModal';
+import ManageCategories from './pages/ManageCategories';
 
 const formatBytes = (bytes) => {
   if (!bytes || bytes <= 0) return '0 KB';
@@ -176,7 +177,7 @@ function Home({ isAdmin }) {
                   {stats?.totalCategories || 0}
                 </span>
               )}
-              <span className="text-[9px] font-label-mono text-text-muted uppercase tracking-wider">Directories</span>
+              <span className="text-[9px] font-label-mono text-text-muted uppercase tracking-wider">Categories</span>
             </div>
           </div>
         </section>
@@ -192,6 +193,13 @@ function Home({ isAdmin }) {
               >
                 <span className="material-symbols-outlined text-[18px]">upload</span>
                 Upload New File
+              </button>
+              <button 
+                onClick={() => navigate('/admin/categories')}
+                className="bg-surface-elevated text-text-high-contrast px-4 py-3 font-label-mono border border-border-subtle hover:border-text-muted transition-colors flex-1 flex justify-center items-center gap-2 rounded-sm"
+              >
+                <span className="material-symbols-outlined text-[18px]">category</span>
+                Manage Categories
               </button>
               <button 
                 onClick={() => navigate('/admin/change-password')}
@@ -213,7 +221,7 @@ function Home({ isAdmin }) {
 
         <div className="max-w-4xl mx-auto">
           {/* Categories Section */}
-          <DirectoriesGrid isAdmin={isAdmin} />
+          <CategoriesGrid isAdmin={isAdmin} />
           
           {/* Search Results Section */}
           {searchTerm && (
@@ -256,7 +264,7 @@ function Home({ isAdmin }) {
                       No matching assets found
                     </h3>
                     <p className="text-[11px] text-text-muted leading-relaxed">
-                      Try another keyword or browse a directory.
+                      Try another keyword or browse a category.
                     </p>
                   </div>
                   <button 
@@ -273,8 +281,6 @@ function Home({ isAdmin }) {
                       key={asset.id} 
                       asset={asset} 
                       isAdmin={isAdmin}
-                      onEdit={setEditingAsset}
-                      onDelete={setAssetToDelete}
                     />
                   ))}
                 </div>
@@ -335,6 +341,7 @@ function App() {
         <Route path="/admin/category/:slug" element={<CategoryBrowser isAdmin={true} />} />
         <Route path="/admin/download/:id" element={<DownloadAsset isAdmin={true} />} />
         <Route path="/admin/upload" element={<UploadMetadata />} />
+        <Route path="/admin/categories" element={<ManageCategories />} />
         <Route path="/admin/change-password" element={<ChangePassword />} />
         
         <Route path="/admin/login" element={<AdminLogin />} />

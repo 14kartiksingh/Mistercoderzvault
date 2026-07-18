@@ -3,17 +3,20 @@ const { sendSuccess, sendError } = require('../utils/response');
 
 /**
  * Get all categories
- * Categories are system-managed in V1.
  */
 const getCategories = async (req, res) => {
   try {
+    const showAll = req.query.all === 'true';
+    const where = showAll ? {} : { isActive: true };
+
     const categories = await prisma.category.findMany({
+      where,
       include: {
         _count: {
           select: { assets: { where: { isDeleted: false } } }
         }
       },
-      orderBy: { name: 'asc' },
+      orderBy: { order: 'asc' },
     });
     return sendSuccess(res, categories);
   } catch (error) {
@@ -22,6 +25,171 @@ const getCategories = async (req, res) => {
   }
 };
 
+/**
+ * Create a new category
+ */
+const createCategory = async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return sendError(res, 'Name is required', 400);
+    }
+
+    const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    if (!slug) {
+      return sendError(res, 'Invalid category name', 400);
+    }
+
+    // Check duplicate name or slug
+    const existing = await prisma.category.findFirst({
+      where: {
+        OR: [
+          { name: { equals: name.trim(), mode: 'insensitive' } },
+          { slug }
+        ]
+      }
+    });
+
+    if (existing) {
+      return sendError(res, 'Category name already exists', 400);
+    }
+
+    // Find max order
+    const maxOrderCategory = await prisma.category.findFirst({
+      orderBy: { order: 'desc' }
+    });
+    const order = maxOrderCategory ? maxOrderCategory.order + 1 : 0;
+
+    const newCategory = await prisma.category.create({
+      data: {
+        name: name.trim(),
+        slug,
+        order,
+        isActive: true
+      }
+    });
+
+    return sendSuccess(res, newCategory, 201);
+  } catch (error) {
+    console.error('Error creating category:', error);
+    return sendError(res, 'Failed to create category', 500);
+  }
+};
+
+/**
+ * Update a category (name, isActive, order)
+ */
+const updateCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, isActive, order } = req.body;
+
+    const data = {};
+    if (name !== undefined) {
+      if (!name.trim()) {
+        return sendError(res, 'Name cannot be empty', 400);
+      }
+      const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      if (!slug) {
+        return sendError(res, 'Invalid category name', 400);
+      }
+
+      // Check duplicate name/slug (excluding current category)
+      const existing = await prisma.category.findFirst({
+        where: {
+          NOT: { id },
+          OR: [
+            { name: { equals: name.trim(), mode: 'insensitive' } },
+            { slug }
+          ]
+        }
+      });
+      if (existing) {
+        return sendError(res, 'Category name already exists', 400);
+      }
+
+      data.name = name.trim();
+      data.slug = slug;
+    }
+
+    if (isActive !== undefined) {
+      data.isActive = !!isActive;
+    }
+
+    if (order !== undefined) {
+      data.order = parseInt(order, 10);
+    }
+
+    const updated = await prisma.category.update({
+      where: { id },
+      data
+    });
+
+    return sendSuccess(res, updated);
+  } catch (error) {
+    console.error('Error updating category:', error);
+    return sendError(res, 'Failed to update category', 500);
+  }
+};
+
+/**
+ * Delete a category
+ */
+const deleteCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if category contains assets
+    const assetCount = await prisma.asset.count({
+      where: {
+        categoryId: id,
+        isDeleted: false
+      }
+    });
+
+    if (assetCount > 0) {
+      return sendError(res, 'Cannot delete category that contains active assets', 400);
+    }
+
+    await prisma.category.delete({
+      where: { id }
+    });
+
+    return sendSuccess(res, { message: 'Category deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting category:', error);
+    return sendError(res, 'Failed to delete category', 500);
+  }
+};
+
+/**
+ * Reorder categories batch
+ */
+const reorderCategories = async (req, res) => {
+  try {
+    const { orders } = req.body; // Array of { id, order }
+    if (!orders || !Array.isArray(orders)) {
+      return sendError(res, 'Orders list is required', 400);
+    }
+
+    await prisma.$transaction(
+      orders.map(item => prisma.category.update({
+        where: { id: item.id },
+        data: { order: parseInt(item.order, 10) }
+      }))
+    );
+
+    return sendSuccess(res, { message: 'Categories reordered successfully' });
+  } catch (error) {
+    console.error('Error reordering categories:', error);
+    return sendError(res, 'Failed to reorder categories', 500);
+  }
+};
+
 module.exports = {
   getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  reorderCategories
 };
