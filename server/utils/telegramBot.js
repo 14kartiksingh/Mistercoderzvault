@@ -352,8 +352,8 @@ const initBot = () => {
             console.log(`Asset saved to database (SINGLE): ${newAsset.id}`);
             
             writeLog(userId, fileName, fileSize, fileId, 'SUCCESS');
-            markUploadComplete(currentUploadId);
-            clearSession();
+            await markUploadComplete(activeSession.id);
+            await clearSession();
 
             const successMsg = `✅ Upload completed.\n\nFilename:\n${fileName}\n\nYour file has been securely stored inside MISTER CODERZ Vault.`;
             bot.sendMessage(chatId, successMsg);
