@@ -34,7 +34,7 @@ const login = async (req, res) => {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     });
 
-    return sendSuccess(res, { message: 'Logged in successfully' });
+    return sendSuccess(res, { message: 'Logged in successfully', token });
   } catch (error) {
     console.error('Login error:', error);
     return sendError(res, 'Internal server error during login', 500);

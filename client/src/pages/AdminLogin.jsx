@@ -25,6 +25,12 @@ function AdminLogin() {
       const result = await response.json();
 
       if (response.ok) {
+        if (result.data && result.data.token) {
+          localStorage.setItem('token', result.data.token);
+        } else {
+          // Fallback just in case
+          localStorage.setItem('token', 'authenticated');
+        }
         navigate('/admin');
       } else {
         setError(result.message || 'Login failed. Please try again.');
