@@ -283,29 +283,62 @@ const downloadFile = async (req, res) => {
       return sendError(res, 'File not found or not yet uploaded', 404);
     }
 
+    const fileName = assetFile.fileName || 'file';
+    const fileSize = assetFile.fileSize || 0n;
+    let mimeType = assetFile.contentType || 'application/octet-stream';
+
+    // Parse HTTP Range header
+    const rangeHeader = req.headers.range;
+    let start = 0n;
+    let end = fileSize - 1n;
+    let isRangeRequest = false;
+
+    if (rangeHeader) {
+      const parts = rangeHeader.replace(/bytes=/, "").split("-");
+      const partialStart = parts[0];
+      const partialEnd = parts[1];
+
+      start = partialStart ? BigInt(partialStart) : 0n;
+      end = partialEnd ? BigInt(partialEnd) : fileSize - 1n;
+
+      if (start >= fileSize || end >= fileSize || start > end) {
+        res.setHeader('Content-Range', `bytes */${fileSize}`);
+        return sendError(res, 'Requested Range Not Satisfiable', 416);
+      }
+      isRangeRequest = true;
+    }
+
+    // Set common headers
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    res.setHeader('Content-Type', mimeType);
+
+    const totalToFetch = end - start + 1n;
+
+    if (isRangeRequest) {
+      res.statusCode = 206;
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+      res.setHeader('Content-Length', totalToFetch.toString());
+    } else {
+      res.statusCode = 200;
+      res.setHeader('Content-Length', fileSize.toString());
+    }
+
     let client = getTelegramClient();
     if (!client) {
       client = await initTelegramClient();
     }
 
+    // Fallback to mock data stream for testing/verification if client is not configured
     if (!client) {
-      console.warn('⚠️ [Telegram Client] Client is not initialized (e.g. rate-limit/FloodWait). Falling back to mock data stream for testing/verification.');
-      const fileName = assetFile.fileName || 'file';
-      const fileSize = assetFile.fileSize || 0n;
-      const mimeType = assetFile.contentType || 'application/octet-stream';
-      
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
-      res.setHeader('Content-Type', mimeType);
-      res.setHeader('Content-Length', fileSize.toString());
-      res.setHeader('Accept-Ranges', 'none');
-      
-      // Stream mock data chunks
+      console.warn('⚠️ [Telegram Client] Client is not initialized. Falling back to mock data stream for testing.');
       const chunkSize = 512 * 1024; // 512KB chunks
       let bytesSent = 0n;
-      while (bytesSent < fileSize && !res.destroyed) {
-        const remaining = fileSize - bytesSent;
+      
+      while (bytesSent < totalToFetch && !res.destroyed) {
+        const remaining = totalToFetch - bytesSent;
         const currentChunkSize = remaining < BigInt(chunkSize) ? Number(remaining) : chunkSize;
-        const buffer = Buffer.alloc(currentChunkSize, 'A'); // Mock data: filled with 'A's
+        const buffer = Buffer.alloc(currentChunkSize, 'A');
         const canWrite = res.write(buffer);
         bytesSent += BigInt(currentChunkSize);
         if (!canWrite) {
@@ -351,7 +384,6 @@ const downloadFile = async (req, res) => {
     // Identify media location and DC ID
     let fileLocation;
     let dcId;
-    let mimeType = assetFile.contentType || 'application/octet-stream';
 
     if (message.media.document) {
       const doc = message.media.document;
@@ -380,29 +412,48 @@ const downloadFile = async (req, res) => {
       return sendError(res, 'Unsupported media type on Telegram.', 400);
     }
 
-    const fileName = assetFile.fileName || 'file';
-    const fileSize = assetFile.fileSize || 0n;
-
-    // Set download response headers
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    // Update MIME type header just in case it was resolved from Telegram media
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Length', fileSize.toString());
-    res.setHeader('Accept-Ranges', 'none');
 
     // Stream the chunks
     try {
-      for await (const chunk of client.iterDownload({
+      // Align start to 4KB (4096) multiple downwards to prevent OFFSET_INVALID
+      const alignedStart = (start / 4096n) * 4096n;
+      const skipBytes = Number(start - alignedStart);
+      const bigInt = require('big-integer');
+
+      let totalWritten = 0n;
+      let isFirst = true;
+
+      for await (let chunk of client.iterDownload({
         file: fileLocation,
         dcId: dcId,
-        requestSize: 512 * 1024, // 512KB chunks
+        requestSize: 512 * 1024, // 512KB chunks (optimal for direct download)
+        workers: 4,              // 4 parallel workers for throughput boost
+        offset: bigInt(alignedStart.toString())
       })) {
         if (res.destroyed) {
           console.log(`[Download] Client aborted download for file: ${fileName}`);
           break;
         }
-        const canWrite = res.write(chunk);
-        if (!canWrite) {
-          await new Promise((resolve) => res.once('drain', resolve));
+
+        if (isFirst) {
+          chunk = chunk.slice(skipBytes);
+          isFirst = false;
+        }
+
+        const remaining = totalToFetch - totalWritten;
+        if (BigInt(chunk.length) >= remaining) {
+          const finalChunk = chunk.slice(0, Number(remaining));
+          res.write(finalChunk);
+          totalWritten += BigInt(finalChunk.length);
+          break;
+        } else {
+          const canWrite = res.write(chunk);
+          totalWritten += BigInt(chunk.length);
+          if (!canWrite) {
+            await new Promise((resolve) => res.once('drain', resolve));
+          }
         }
       }
       if (!res.destroyed) {
