@@ -183,11 +183,7 @@ function DownloadAsset({ isAdmin }) {
   const [toast, setToast] = useState('');
   const [showReportModal, setShowReportModal] = useState(false);
 
-  // Sequential queue state
-  const [downloadQueue, setDownloadQueue] = useState([]);
-  const [activeQueueIndex, setActiveQueueIndex] = useState(-1);
   const [downloadStatuses, setDownloadStatuses] = useState({});
-  const downloadWindowRef = useRef(null);
 
   const fetchAsset = async () => {
     try {
@@ -218,9 +214,6 @@ function DownloadAsset({ isAdmin }) {
 
   useEffect(() => {
     fetchAsset();
-    // Reset download queue on ID changes
-    setDownloadQueue([]);
-    setActiveQueueIndex(-1);
     setDownloadStatuses({});
   }, [id]);
 
@@ -243,72 +236,9 @@ function DownloadAsset({ isAdmin }) {
     fetchRelated();
   }, [asset]);
 
-  // Sequential Queue Processor
-  useEffect(() => {
-    if (activeQueueIndex === -1 || activeQueueIndex >= downloadQueue.length) {
-      if (activeQueueIndex >= downloadQueue.length && downloadQueue.length > 0) {
-        setToast('ALL_DOWNLOADS_TRIGGERED');
-        setTimeout(() => setToast(''), 3000);
-        setActiveQueueIndex(-1);
-        setDownloadQueue([]);
-        downloadWindowRef.current = null;
-      }
-      return;
-    }
 
-    const file = downloadQueue[activeQueueIndex];
-    
-    // Mark as actively downloading
-    setDownloadStatuses(prev => ({ ...prev, [file.id]: 'active' }));
-
-    const targetUrl = `/api/assets/file/${file.id}/download`;
-
-    // For files beyond the first one, update the location of the opened tab
-    if (activeQueueIndex > 0) {
-      if (downloadWindowRef.current && !downloadWindowRef.current.closed) {
-        downloadWindowRef.current.location.href = targetUrl;
-      } else {
-        downloadWindowRef.current = window.open(targetUrl, '_blank');
-      }
-    }
-
-    // Wait 1500ms before triggering the next file in order to prevent browser restrictions
-    const timer = setTimeout(() => {
-      setDownloadStatuses(prev => ({ ...prev, [file.id]: 'done' }));
-      setActiveQueueIndex(prev => prev + 1);
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, [activeQueueIndex, downloadQueue]);
-
-  // Start sequential queue download
-  const triggerQueueDownload = (filesToDownload) => {
-    if (activeQueueIndex !== -1) return; // Queue already running
-    if (filesToDownload.length === 0) return;
-
-    // Open first file synchronously in user-event call to bypass popup blocker
-    const firstFile = filesToDownload[0];
-    const firstUrl = `/api/assets/file/${firstFile.id}/download`;
-    
-    downloadWindowRef.current = window.open(firstUrl, '_blank');
-
-    const statuses = { ...downloadStatuses };
-    filesToDownload.forEach(f => {
-      statuses[f.id] = 'queued';
-    });
-    setDownloadStatuses(statuses);
-    setDownloadQueue(filesToDownload);
-    setActiveQueueIndex(0);
-  };
 
   const handleIndividualDownload = (file) => {
-    // Prevent starting individual triggers while full queue is running
-    if (activeQueueIndex !== -1) {
-      setToast('QUEUE_IN_PROGRESS');
-      setTimeout(() => setToast(''), 2000);
-      return;
-    }
-
     setDownloadStatuses(prev => ({ ...prev, [file.id]: 'active' }));
     
     // Open in a new tab synchronously
@@ -320,20 +250,8 @@ function DownloadAsset({ isAdmin }) {
   };
 
   const handlePrimaryCTA = () => {
-    if (!asset) return;
-    if (asset.uploadType === 'SINGLE') {
-      window.open(`/api/assets/${asset.id}/download`, '_blank');
-    } else if (asset.uploadType === 'MULTIPART') {
-      triggerQueueDownload(sortedFiles);
-    } else if (asset.uploadType === 'FOLDER') {
-      // For folder, trigger sequential download of all files
-      triggerQueueDownload(filesList);
-      // Smooth scroll to view explorer progress
-      const explorer = document.getElementById('file-explorer-section');
-      if (explorer) {
-        explorer.scrollIntoView({ behavior: 'smooth' });
-      }
-    }
+    if (!asset || asset.uploadType !== 'SINGLE') return;
+    window.open(`/api/assets/${asset.id}/download`, '_blank');
   };
 
   const copyLink = () => {
@@ -422,10 +340,7 @@ function DownloadAsset({ isAdmin }) {
   const missingFiles = filesList.filter(f => !f.telegramMessageId);
   const hasMetadataIssues = missingFiles.length > 0;
 
-  // Progress calculations
-  const totalInQueue = downloadQueue.length;
-  const completedInQueue = Object.values(downloadStatuses).filter(s => s === 'done').length;
-  const progressPercent = totalInQueue > 0 ? Math.round((completedInQueue / totalInQueue) * 100) : 0;
+
 
   return (
     <>
@@ -501,9 +416,22 @@ function DownloadAsset({ isAdmin }) {
               <div className="bg-primary/10 border border-primary/20 p-4 rounded-sm flex items-start gap-3">
                 <span className="material-symbols-outlined text-primary text-[20px] select-none">info</span>
                 <div>
-                  <h4 className="text-xs font-bold text-text-high-contrast font-label-mono uppercase tracking-wider font-semibold">Multipart Archive Complete</h4>
+                  <h4 className="text-xs font-bold text-text-high-contrast font-label-mono uppercase tracking-wider font-semibold">Multipart Archive Details</h4>
                   <p className="text-xs text-text-muted mt-1 leading-relaxed">
-                    This archive contains multiple parts. Visual stats confirm all <strong>{filesList.length} / {filesList.length} parts</strong> are successfully indexed. Please download every part completely before extracting.
+                    Download every part individually before extracting the archive. All <strong>{filesList.length}</strong> parts are indexed below.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Folder Notice Banner */}
+            {asset.uploadType === 'FOLDER' && !hasMetadataIssues && (
+              <div className="bg-primary/10 border border-primary/20 p-4 rounded-sm flex items-start gap-3">
+                <span className="material-symbols-outlined text-primary text-[20px] select-none">info</span>
+                <div>
+                  <h4 className="text-xs font-bold text-text-high-contrast font-label-mono uppercase tracking-wider font-semibold">Folder Directory Details</h4>
+                  <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                    Please browse the files inside this directory and download them individually using the buttons below.
                   </p>
                 </div>
               </div>
@@ -525,18 +453,7 @@ function DownloadAsset({ isAdmin }) {
                 </span>
               </div>
 
-              {/* Sequential Queue Download Progress Strip */}
-              {activeQueueIndex !== -1 && (
-                <div className="bg-surface p-4 border-b border-border-subtle flex flex-col gap-2 select-none">
-                  <div className="flex justify-between items-center text-xs font-label-mono">
-                    <span className="text-primary font-bold animate-pulse">DOWNLOADING ARCHIVE PARTS...</span>
-                    <span className="text-text-high-contrast">{progressPercent}% ({completedInQueue}/{totalInQueue})</span>
-                  </div>
-                  <div className="w-full bg-surface-container h-1.5 rounded overflow-hidden">
-                    <div className="bg-primary h-full transition-all duration-300" style={{ width: `${progressPercent}%` }}></div>
-                  </div>
-                </div>
-              )}
+
 
               {/* Single File Structure Layout */}
               {asset.uploadType === 'SINGLE' && (
@@ -636,17 +553,24 @@ function DownloadAsset({ isAdmin }) {
             {/* Primary Action Panel */}
             <div className="bg-surface-elevated border border-border-subtle p-6 rounded-sm flex flex-col gap-4">
               
-              <button 
-                onClick={handlePrimaryCTA}
-                disabled={activeQueueIndex !== -1}
-                className="w-full bg-primary text-background hover:bg-primary-hover disabled:bg-primary/40 disabled:text-background/80 active:bg-primary-active py-3.5 rounded-sm font-label-mono text-xs font-bold transition-all shadow-lg flex items-center justify-center gap-2 hover:scale-[1.01]"
-              >
-                <span className="material-symbols-outlined text-[18px]">cloud_download</span>
-                {activeQueueIndex !== -1 && 'DOWNLOADING...'}
-                {activeQueueIndex === -1 && asset.uploadType === 'SINGLE' && 'DOWNLOAD ASSET'}
-                {activeQueueIndex === -1 && asset.uploadType === 'MULTIPART' && 'DOWNLOAD ALL PARTS'}
-                {activeQueueIndex === -1 && asset.uploadType === 'FOLDER' && 'DOWNLOAD FULL FOLDER'}
-              </button>
+              {asset.uploadType === 'SINGLE' ? (
+                <button 
+                  onClick={handlePrimaryCTA}
+                  className="w-full bg-primary text-background hover:bg-primary-hover active:bg-primary-active py-3.5 rounded-sm font-label-mono text-xs font-bold transition-all shadow-lg flex items-center justify-center gap-2 hover:scale-[1.01]"
+                >
+                  <span className="material-symbols-outlined text-[18px]">cloud_download</span>
+                  DOWNLOAD ASSET
+                </button>
+              ) : (
+                <div className="bg-surface border border-border-subtle p-3 rounded-sm text-center">
+                  <span className="material-symbols-outlined text-primary text-[20px] mb-1 select-none">info</span>
+                  <p className="text-[10px] text-text-muted leading-relaxed font-label-mono uppercase tracking-tight">
+                    {asset.uploadType === 'MULTIPART' 
+                      ? 'Download every part individually before extracting.' 
+                      : 'Browse & download files individually below.'}
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-3 gap-2 mt-2">
                 <button 
@@ -743,8 +667,6 @@ function DownloadAsset({ isAdmin }) {
             <span className="text-xs font-label-mono font-bold text-text-high-contrast">
               {toast === 'LINK_COPIED' && 'URL_COPIED_TO_CLIPBOARD'}
               {toast === 'REPORT_SUBMITTED' && 'ASSET_REPORTED_TO_MODERATOR'}
-              {toast === 'ALL_DOWNLOADS_TRIGGERED' && 'DOWNLOAD_QUEUE_COMPLETED'}
-              {toast === 'QUEUE_IN_PROGRESS' && 'DOWNLOAD_QUEUE_ACTIVE'}
             </span>
           </div>
         )}
