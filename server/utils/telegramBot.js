@@ -2,7 +2,6 @@ const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
 const prisma = require('../config/db');
-
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const storageChannelId = process.env.TELEGRAM_STORAGE_CHANNEL_ID;
 let bot = null;
@@ -401,9 +400,10 @@ const initBot = () => {
     }
   });
 };
-
+const getBot = () => bot;
 module.exports = {
   initBot,
+  getBot,
   setCurrentUploadId,
   checkUploadStatus,
   markUploadComplete,

@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
 
 // Load environment variables FIRST
-dotenv.config({ path: '../.env' });
+dotenv.config({ path: '.env' });
 
 const routes = require('./routes');
 
