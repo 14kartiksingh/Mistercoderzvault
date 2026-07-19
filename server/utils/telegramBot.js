@@ -431,14 +431,33 @@ const initBot = () => {
             }
 
             if (pendingFile) {
+              // Check for file size divergence (e.g. Telegram compressed a photo)
+              let sizeAdjustment = 0n;
+              if (BigInt(fileSize) !== pendingFile.fileSize) {
+                console.log(`[Folder Match] File size diverged. Expected: ${pendingFile.fileSize}, Actual: ${fileSize}. Adjusting...`);
+                sizeAdjustment = BigInt(fileSize) - pendingFile.fileSize;
+              }
+
               // Update the AssetFile record
               await prisma.assetFile.update({
                 where: { id: pendingFile.id },
                 data: {
                   telegramFileId: fileId,
-                  telegramMessageId: result.message_id
+                  telegramMessageId: result.message_id,
+                  ...(sizeAdjustment !== 0n && { fileSize: BigInt(fileSize) })
                 }
               });
+
+              // Adjust parent Asset size if necessary
+              if (sizeAdjustment !== 0n) {
+                const parentAsset = await prisma.asset.findUnique({ where: { id: assetId } });
+                if (parentAsset) {
+                  await prisma.asset.update({
+                    where: { id: assetId },
+                    data: { sizeBytes: parentAsset.sizeBytes + sizeAdjustment }
+                  });
+                }
+              }
 
               // Check if any files are still pending
               const remainingPending = await prisma.assetFile.count({

@@ -125,7 +125,7 @@ const StatusBadge = ({ status }) => {
   return null;
 };
 
-const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onIndividualDelete, deletingFileId, onReorder }) => {
+const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onIndividualDelete, deletingFileId, onReorder, editingFileId, editingFileName, setEditingFileName, onRenameStart, onRenameSave, onRenameCancel }) => {
   const [isOpen, setIsOpen] = useState(true);
   
   if (node.isFolder) {
@@ -152,6 +152,12 @@ const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onInd
                 onIndividualDelete={onIndividualDelete}
                 deletingFileId={deletingFileId}
                 onReorder={onReorder}
+                editingFileId={editingFileId}
+                editingFileName={editingFileName}
+                setEditingFileName={setEditingFileName}
+                onRenameStart={onRenameStart}
+                onRenameSave={onRenameSave}
+                onRenameCancel={onRenameCancel}
               />
             ))}
           </div>
@@ -164,15 +170,54 @@ const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onInd
     const status = downloadStatuses[node.file.id] || 'idle';
     return (
       <div className="flex items-center justify-between py-2 px-3 text-xs text-text-muted hover:bg-surface-elevated hover:text-text-high-contrast border-b border-border-subtle/10 group transition-colors">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1 pr-4">
           <span className="material-symbols-outlined text-[16px] text-text-muted/70 group-hover:text-primary transition-colors">{fileIcon}</span>
-          <span className="truncate" title={node.name}>{node.name}</span>
+          {editingFileId === node.file.id ? (
+            <input 
+              type="text"
+              value={editingFileName}
+              onChange={(e) => setEditingFileName(e.target.value)}
+              className="bg-surface-container border border-border-subtle text-text-high-contrast text-xs px-2 py-1 rounded w-full focus:outline-none focus:border-primary"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onRenameSave(node.file.id);
+                if (e.key === 'Escape') onRenameCancel();
+              }}
+            />
+          ) : (
+            <span className="truncate" title={node.name}>{node.name}</span>
+          )}
           <span className="text-[9px] font-label-mono text-text-muted/50 bg-surface-container px-1.5 py-0.5 rounded shrink-0">{sizeFormatted}</span>
           <StatusBadge status={status} />
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {isAdmin && (
-            <>
+            editingFileId === node.file.id ? (
+              <>
+                <button 
+                  onClick={() => onRenameSave(node.file.id)}
+                  className="text-success hover:text-success-hover flex items-center justify-center p-1 transition-all"
+                  title="Save"
+                >
+                  <span className="material-symbols-outlined text-[16px]">check</span>
+                </button>
+                <button 
+                  onClick={onRenameCancel}
+                  className="text-error hover:text-error-hover flex items-center justify-center p-1 transition-all"
+                  title="Cancel"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button 
+                  onClick={() => onRenameStart(node.file)}
+                  className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
+                  title="Rename"
+                >
+                  <span className="material-symbols-outlined text-[16px]">edit</span>
+                </button>
               <button 
                 onClick={() => onReorder(node.file, 'up')}
                 className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
@@ -227,6 +272,8 @@ function DownloadAsset({ isAdmin }) {
   const [deletingFileId, setDeletingFileId] = useState(null);
   const [isAppending, setIsAppending] = useState(false);
   const [isAppendingComplete, setIsAppendingComplete] = useState(false);
+  const [editingFileId, setEditingFileId] = useState(null);
+  const [editingFileName, setEditingFileName] = useState('');
   const fileInputRef = useRef(null);
   const pollingInterval = useRef(null);
 
@@ -344,6 +391,58 @@ function DownloadAsset({ isAdmin }) {
     } catch (err) {
       console.error('Failed to reorder files', err);
       fetchAsset();
+    }
+  };
+
+  const handleRenameStart = (file) => {
+    setEditingFileId(file.id);
+    setEditingFileName(file.fileName);
+  };
+
+  const handleRenameCancel = () => {
+    setEditingFileId(null);
+    setEditingFileName('');
+  };
+
+  const handleRenameSave = async (fileId) => {
+    if (!editingFileName || editingFileName.trim() === '') {
+      alert('Filename cannot be empty');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/assets/file/${fileId}/rename`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ newName: editingFileName })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to rename file');
+      }
+      
+      setAsset(prev => {
+        const newFiles = [...prev.files];
+        const fileIndex = newFiles.findIndex(f => f.id === fileId);
+        if (fileIndex !== -1) {
+          newFiles[fileIndex].fileName = data.data.fileName;
+          if (newFiles[fileIndex].relativePath) {
+            const parentPath = newFiles[fileIndex].relativePath.substring(0, newFiles[fileIndex].relativePath.lastIndexOf('/'));
+            newFiles[fileIndex].relativePath = parentPath ? `${parentPath}/${data.data.fileName}` : data.data.fileName;
+          }
+        }
+        return { ...prev, files: newFiles };
+      });
+      
+      handleRenameCancel();
+    } catch (err) {
+      alert(err.message);
     }
   };
 
@@ -744,41 +843,81 @@ function DownloadAsset({ isAdmin }) {
                     const status = downloadStatuses[file.id] || 'idle';
                     return (
                       <div key={file.id} className="flex justify-between items-center p-3.5 hover:bg-surface transition-colors">
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-4">
                           <span className="font-label-mono text-[9px] text-primary bg-primary/10 px-2 py-0.5 rounded-sm select-none">PART {file.partNumber || idx + 1}</span>
                           <span className="material-symbols-outlined text-[16px] text-text-muted/70">{fileIcon}</span>
-                          <span className="text-xs font-semibold text-text-high-contrast truncate" title={file.fileName}>{file.fileName}</span>
+                          {editingFileId === file.id ? (
+                            <input 
+                              type="text"
+                              value={editingFileName}
+                              onChange={(e) => setEditingFileName(e.target.value)}
+                              className="bg-surface-elevated border border-border-subtle text-text-high-contrast text-xs px-2 py-1 rounded w-full focus:outline-none focus:border-primary"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameSave(file.id);
+                                if (e.key === 'Escape') handleRenameCancel();
+                              }}
+                            />
+                          ) : (
+                            <span className="text-xs font-semibold text-text-high-contrast truncate" title={file.fileName}>{file.fileName}</span>
+                          )}
                           <span className="font-label-mono text-[10px] text-text-muted/60 shrink-0">{formatBytes(Number(file.fileSize))}</span>
                           <StatusBadge status={status} />
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 shrink-0">
                           {isAdmin && (
-                            <>
-                              <button 
-                                onClick={() => handleReorder(file, 'up')}
-                                className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
-                                title="Move up"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
-                              </button>
-                              <button 
-                                onClick={() => handleReorder(file, 'down')}
-                                className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
-                                title="Move down"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">arrow_downward</span>
-                              </button>
-                              <button 
-                                onClick={() => setFileToDelete(file)}
-                                disabled={deletingFileId === file.id}
-                                className={`text-error hover:text-error-hover flex items-center justify-center p-1 rounded transition-all ${deletingFileId === file.id ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
-                                title={`Delete Part ${file.partNumber || idx + 1}`}
-                              >
-                                <span className="material-symbols-outlined text-[18px]">
-                                  {deletingFileId === file.id ? 'hourglass_empty' : 'delete'}
-                                </span>
-                              </button>
-                            </>
+                            editingFileId === file.id ? (
+                              <>
+                                <button 
+                                  onClick={() => handleRenameSave(file.id)}
+                                  className="text-success hover:text-success-hover flex items-center justify-center p-1 transition-all"
+                                  title="Save"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">check</span>
+                                </button>
+                                <button 
+                                  onClick={handleRenameCancel}
+                                  className="text-error hover:text-error-hover flex items-center justify-center p-1 transition-all"
+                                  title="Cancel"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">close</span>
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button 
+                                  onClick={() => handleRenameStart(file)}
+                                  className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
+                                  title="Rename"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">edit</span>
+                                </button>
+                                <button 
+                                  onClick={() => handleReorder(file, 'up')}
+                                  className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
+                                  title="Move up"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
+                                </button>
+                                <button 
+                                  onClick={() => handleReorder(file, 'down')}
+                                  className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
+                                  title="Move down"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">arrow_downward</span>
+                                </button>
+                                <button 
+                                  onClick={() => setFileToDelete(file)}
+                                  disabled={deletingFileId === file.id}
+                                  className={`text-error hover:text-error-hover flex items-center justify-center p-1 rounded transition-all ${deletingFileId === file.id ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+                                  title={`Delete Part ${file.partNumber || idx + 1}`}
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">
+                                    {deletingFileId === file.id ? 'hourglass_empty' : 'delete'}
+                                  </span>
+                                </button>
+                              </>
+                            )
                           )}
                           <button 
                             onClick={() => handleIndividualDownload(file)}
@@ -809,6 +948,12 @@ function DownloadAsset({ isAdmin }) {
                           onIndividualDelete={(file) => setFileToDelete(file)}
                           deletingFileId={deletingFileId}
                           onReorder={handleReorder}
+                          editingFileId={editingFileId}
+                          editingFileName={editingFileName}
+                          setEditingFileName={setEditingFileName}
+                          onRenameStart={handleRenameStart}
+                          onRenameSave={handleRenameSave}
+                          onRenameCancel={handleRenameCancel}
                         />
                       ))}
                     </div>

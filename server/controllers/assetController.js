@@ -626,6 +626,76 @@ const reorderAssetFiles = async (req, res) => {
   }
 };
 
+/**
+ * Rename an individual file in an asset
+ * Route: PUT /api/assets/file/:fileId/rename
+ */
+const renameAssetFile = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { newName } = req.body;
+    
+    if (!newName || newName.trim() === '') {
+      return sendError(res, 'New filename cannot be empty', 400);
+    }
+    
+    const assetFile = await prisma.assetFile.findUnique({
+      where: { id: fileId },
+      include: { asset: { include: { files: true } } }
+    });
+    
+    if (!assetFile) {
+      return sendError(res, 'File not found', 404);
+    }
+    
+    const path = require('path');
+    const originalExt = path.extname(assetFile.fileName).toLowerCase();
+    
+    let finalNewName = newName.trim();
+    if (!finalNewName.toLowerCase().endsWith(originalExt)) {
+      finalNewName = `${finalNewName}${originalExt}`;
+    }
+    
+    if (finalNewName === assetFile.fileName) {
+      return sendSuccess(res, { message: 'Filename unchanged' });
+    }
+    
+    const assetFiles = assetFile.asset.files;
+    const isDuplicate = assetFiles.some(f => {
+      if (f.id === fileId) return false;
+      if (assetFile.asset.uploadType === 'FOLDER') {
+        const fParentPath = f.relativePath ? f.relativePath.substring(0, f.relativePath.lastIndexOf('/')) : null;
+        const targetParentPath = assetFile.relativePath ? assetFile.relativePath.substring(0, assetFile.relativePath.lastIndexOf('/')) : null;
+        if (fParentPath === targetParentPath && f.fileName.toLowerCase() === finalNewName.toLowerCase()) {
+          return true;
+        }
+        return false;
+      }
+      return f.fileName.toLowerCase() === finalNewName.toLowerCase();
+    });
+    
+    if (isDuplicate) {
+      return sendError(res, 'A file with this name already exists in this location', 409);
+    }
+    
+    let updateData = { fileName: finalNewName };
+    if (assetFile.asset.uploadType === 'FOLDER' && assetFile.relativePath) {
+      const parentPath = assetFile.relativePath.substring(0, assetFile.relativePath.lastIndexOf('/'));
+      updateData.relativePath = parentPath ? `${parentPath}/${finalNewName}` : finalNewName;
+    }
+    
+    await prisma.assetFile.update({
+      where: { id: fileId },
+      data: updateData
+    });
+    
+    return sendSuccess(res, { message: 'File renamed successfully', data: { fileName: finalNewName } });
+  } catch (error) {
+    console.error('Error renaming asset file:', error);
+    return sendError(res, 'Failed to rename file', 500);
+  }
+};
+
 module.exports = {
   getAssets,
   getAssetById,
@@ -637,4 +707,5 @@ module.exports = {
   getAssetStats,
   deleteAssetFile,
   reorderAssetFiles,
+  renameAssetFile,
 };
