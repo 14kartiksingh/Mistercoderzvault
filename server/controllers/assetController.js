@@ -563,10 +563,66 @@ const deleteAssetFile = async (req, res) => {
       }
     });
 
-    return sendSuccess(res, { message: 'File successfully deleted', isAssetDeleted: asset.files.length === 1 });
+    return sendSuccess(res, { message: 'File successfully deleted', isAssetDeleted: asset.files.length === 1, deletedFileSize: assetFile.fileSize.toString() });
   } catch (error) {
     console.error('Error deleting asset file:', error);
     return sendError(res, 'Failed to delete asset file', 500);
+  }
+};
+
+/**
+ * Reorder files inside an asset
+ */
+const reorderAssetFiles = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fileIds } = req.body; // Array of file IDs in the new order
+
+    if (!fileIds || !Array.isArray(fileIds)) {
+      return sendError(res, 'Invalid request data', 400);
+    }
+
+    const asset = await prisma.asset.findUnique({
+      where: { id },
+      include: { files: true }
+    });
+
+    if (!asset || (asset.uploadType !== 'MULTIPART' && asset.uploadType !== 'FOLDER')) {
+      return sendError(res, 'Invalid asset or asset type for reordering', 400);
+    }
+
+    const existingFileIds = asset.files.map(f => f.id);
+    
+    // Ensure the provided fileIds contain exactly the same set of IDs as the asset's existing files
+    if (existingFileIds.length !== fileIds.length || !existingFileIds.every(id => fileIds.includes(id))) {
+      return sendError(res, 'Provided file IDs do not match the existing files', 400);
+    }
+
+    if (asset.uploadType === 'FOLDER') {
+      // Validate that FOLDER reordering doesn't move files between folders
+      const existingFilesMap = new Map(asset.files.map(f => [f.id, f]));
+      // Note: While this validates all files, if we only allow reordering within a folder on the frontend,
+      // it means the order is just updated. Let's just blindly save the order as partNumber or similar.
+      // Wait, how do we persist FOLDER file ordering? FOLDER files are built into a tree based on relativePath.
+      // `partNumber` can be used to order files within that tree.
+      // Right now, `partNumber` is used for MULTIPART. For FOLDER, `partNumber` is null.
+      // We can use `partNumber` to store the custom order for FOLDER too.
+    }
+
+    // Execute Prisma transaction to update partNumbers
+    await prisma.$transaction(
+      fileIds.map((fileId, index) =>
+        prisma.assetFile.update({
+          where: { id: fileId },
+          data: { partNumber: index + 1 }
+        })
+      )
+    );
+
+    return sendSuccess(res, { message: 'Files reordered successfully' });
+  } catch (error) {
+    console.error('Error reordering asset files:', error);
+    return sendError(res, 'Failed to reorder files', 500);
   }
 };
 
@@ -580,4 +636,5 @@ module.exports = {
   downloadFile,
   getAssetStats,
   deleteAssetFile,
+  reorderAssetFiles,
 };

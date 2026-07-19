@@ -67,7 +67,8 @@ const buildTree = (files) => {
           current.children[part] = {
             name: part,
             isFolder: false,
-            file: file
+            file: file,
+            partNumber: file.partNumber || 0
           };
         } else {
           current.children[part] = {
@@ -80,6 +81,19 @@ const buildTree = (files) => {
       current = current.children[part];
     });
   });
+
+  const sortNode = (node) => {
+    if (!node.isFolder) return;
+    node.childrenArray = Object.values(node.children).sort((a, b) => {
+      if (a.isFolder && !b.isFolder) return -1;
+      if (!a.isFolder && b.isFolder) return 1;
+      if (!a.isFolder && !b.isFolder) return a.partNumber - b.partNumber;
+      return a.name.localeCompare(b.name);
+    });
+    node.childrenArray.forEach(sortNode);
+  };
+  sortNode(root);
+
   return root;
 };
 
@@ -111,7 +125,7 @@ const StatusBadge = ({ status }) => {
   return null;
 };
 
-const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onIndividualDelete, deletingFileId }) => {
+const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onIndividualDelete, deletingFileId, onReorder }) => {
   const [isOpen, setIsOpen] = useState(true);
   
   if (node.isFolder) {
@@ -128,7 +142,7 @@ const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onInd
         </div>
         {isOpen && (
           <div className="border-l border-border-subtle ml-4 pl-2 flex flex-col gap-0.5">
-            {Object.values(node.children).map((child, idx) => (
+            {node.childrenArray.map((child, idx) => (
               <TreeNode 
                 key={idx} 
                 node={child} 
@@ -137,6 +151,7 @@ const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onInd
                 isAdmin={isAdmin}
                 onIndividualDelete={onIndividualDelete}
                 deletingFileId={deletingFileId}
+                onReorder={onReorder}
               />
             ))}
           </div>
@@ -157,16 +172,32 @@ const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onInd
         </div>
         <div className="flex items-center gap-1">
           {isAdmin && (
-            <button 
-              onClick={() => onIndividualDelete(node.file)}
-              disabled={deletingFileId === node.file.id}
-              className={`text-error hover:text-error-hover flex items-center justify-center p-1 transition-all ${deletingFileId === node.file.id ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
-              title="Delete file"
-            >
-              <span className="material-symbols-outlined text-[18px]">
-                {deletingFileId === node.file.id ? 'hourglass_empty' : 'delete'}
-              </span>
-            </button>
+            <>
+              <button 
+                onClick={() => onReorder(node.file, 'up')}
+                className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
+                title="Move up"
+              >
+                <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
+              </button>
+              <button 
+                onClick={() => onReorder(node.file, 'down')}
+                className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
+                title="Move down"
+              >
+                <span className="material-symbols-outlined text-[16px]">arrow_downward</span>
+              </button>
+              <button 
+                onClick={() => onIndividualDelete(node.file)}
+                disabled={deletingFileId === node.file.id}
+                className={`text-error hover:text-error-hover flex items-center justify-center p-1 transition-all ${deletingFileId === node.file.id ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+                title="Delete file"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {deletingFileId === node.file.id ? 'hourglass_empty' : 'delete'}
+                </span>
+              </button>
+            </>
           )}
           <button 
             onClick={() => onIndividualDownload(node.file)}
@@ -194,6 +225,10 @@ function DownloadAsset({ isAdmin }) {
   const [assetToDelete, setAssetToDelete] = useState(null);
   const [fileToDelete, setFileToDelete] = useState(null);
   const [deletingFileId, setDeletingFileId] = useState(null);
+  const [isAppending, setIsAppending] = useState(false);
+  const [isAppendingComplete, setIsAppendingComplete] = useState(false);
+  const fileInputRef = useRef(null);
+  const pollingInterval = useRef(null);
 
   const [downloadStatuses, setDownloadStatuses] = useState({});
 
@@ -247,6 +282,148 @@ function DownloadAsset({ isAdmin }) {
     };
     fetchRelated();
   }, [asset]);
+
+  useEffect(() => {
+    return () => {
+      if (pollingInterval.current) clearInterval(pollingInterval.current);
+    };
+  }, []);
+
+  const handleReorder = async (file, direction) => {
+    if (!asset || (asset.uploadType !== 'MULTIPART' && asset.uploadType !== 'FOLDER')) return;
+    const sortedFiles = [...asset.files].sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+
+    const parentPath = file.relativePath ? file.relativePath.substring(0, file.relativePath.lastIndexOf('/')) : null;
+    
+    const siblings = sortedFiles.filter(f => {
+      if (asset.uploadType === 'MULTIPART') return true;
+      const fParentPath = f.relativePath ? f.relativePath.substring(0, f.relativePath.lastIndexOf('/')) : null;
+      return fParentPath === parentPath;
+    });
+
+    const currentIndex = siblings.findIndex(f => f.id === file.id);
+    if (currentIndex === -1) return;
+    
+    const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (swapIndex < 0 || swapIndex >= siblings.length) return; 
+
+    const newSiblings = [...siblings];
+    [newSiblings[currentIndex], newSiblings[swapIndex]] = [newSiblings[swapIndex], newSiblings[currentIndex]];
+
+    const newOrder = [];
+    let siblingIdx = 0;
+    
+    for (const f of sortedFiles) {
+      const fParentPath = f.relativePath ? f.relativePath.substring(0, f.relativePath.lastIndexOf('/')) : null;
+      if (asset.uploadType === 'MULTIPART' || fParentPath === parentPath) {
+        newOrder.push(newSiblings[siblingIdx].id);
+        siblingIdx++;
+      } else {
+        newOrder.push(f.id);
+      }
+    }
+
+    try {
+      setAsset(prev => {
+        const newFiles = [...prev.files];
+        newFiles.sort((a, b) => newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
+        newFiles.forEach((f, i) => f.partNumber = i + 1);
+        return { ...prev, files: newFiles };
+      });
+
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/assets/${asset.id}/reorder-files`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ fileIds: newOrder })
+      });
+      if (!res.ok) throw new Error('Reorder failed');
+    } catch (err) {
+      console.error('Failed to reorder files', err);
+      fetchAsset();
+    }
+  };
+
+  const handleAddFiles = async (e) => {
+    const fileList = Array.from(e.target.files);
+    if (fileList.length === 0) return;
+
+    const filesList = asset.files || [];
+    const existingNames = new Set(filesList.map(f => (f.relativePath || f.fileName).toLowerCase()));
+    
+    for (const f of fileList) {
+      const pathToCheck = ((asset.uploadType === 'FOLDER' && f.webkitRelativePath) ? f.webkitRelativePath : f.name).toLowerCase();
+      if (existingNames.has(pathToCheck)) {
+        alert(`Duplicate file detected: ${f.name}\nPlease select files that are not already in this asset.`);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    }
+
+    const filesData = fileList.map(file => ({
+      name: file.name,
+      size: file.size,
+      path: (asset.uploadType === 'FOLDER' && file.webkitRelativePath) ? file.webkitRelativePath : file.name
+    }));
+
+    try {
+      setIsAppending(true);
+      const newUploadId = 'upload_append_' + Math.random().toString(36).substr(2, 9);
+      
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/telegram/upload-append', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          uploadId: newUploadId,
+          assetId: asset.id,
+          files: filesData
+        })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Failed to start append session');
+      }
+
+      const botUrl = `https://t.me/${import.meta.env.VITE_TELEGRAM_BOT_USERNAME}?start=${newUploadId}`;
+      window.open(botUrl, '_blank', 'noopener,noreferrer');
+
+      pollingInterval.current = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`/api/telegram/status/${newUploadId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (pollRes.ok) {
+            const data = await pollRes.json();
+            if (data.status === 'complete') {
+              clearInterval(pollingInterval.current);
+              setIsAppending(false);
+              setIsAppendingComplete(true);
+              fetchAsset();
+              setTimeout(() => setIsAppendingComplete(false), 5000);
+            } else {
+              fetchAsset();
+            }
+          }
+        } catch (err) {
+          console.error('Polling error', err);
+        }
+      }, 2000);
+      
+    } catch (err) {
+      alert(err.message);
+      setIsAppending(false);
+    }
+    
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleIndividualDownload = (file) => {
     setDownloadStatuses(prev => ({ ...prev, [file.id]: 'active' }));
@@ -507,9 +684,37 @@ function DownloadAsset({ isAdmin }) {
                     {asset.uploadType === 'SINGLE' ? 'Single File' : (asset.uploadType === 'MULTIPART' ? 'Multipart Files List' : 'Interactive Explorer')}
                   </span>
                 </div>
-                <span className="font-label-mono text-[10px] text-text-muted uppercase">
-                  {filesList.length} FILE{filesList.length !== 1 ? 'S' : ''}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="font-label-mono text-[10px] text-text-muted uppercase">
+                    {filesList.length} FILE{filesList.length !== 1 ? 'S' : ''}
+                  </span>
+                  {isAdmin && asset.uploadType !== 'SINGLE' && (
+                    <div className="relative">
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleAddFiles} 
+                        multiple 
+                        webkitdirectory={asset.uploadType === 'FOLDER' ? "true" : undefined}
+                        className="hidden" 
+                      />
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isAppending}
+                        className={`text-[10px] font-label-mono font-bold uppercase border transition-colors px-2 py-1 rounded-sm flex items-center gap-1 ${isAppendingComplete ? 'text-success border-success' : 'text-primary border-primary hover:bg-primary/10'}`}
+                      >
+                        {isAppending ? (
+                          <span className="material-symbols-outlined text-[14px] animate-spin">refresh</span>
+                        ) : isAppendingComplete ? (
+                          <span className="material-symbols-outlined text-[14px]">check</span>
+                        ) : (
+                          <span className="material-symbols-outlined text-[14px]">add</span>
+                        )}
+                        {isAppending ? 'ADDING...' : isAppendingComplete ? 'ADDED' : 'ADD FILES'}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Single File Structure Layout */}
@@ -548,16 +753,32 @@ function DownloadAsset({ isAdmin }) {
                         </div>
                         <div className="flex items-center gap-1">
                           {isAdmin && (
-                            <button 
-                              onClick={() => setFileToDelete(file)}
-                              disabled={deletingFileId === file.id}
-                              className={`text-error hover:text-error-hover flex items-center justify-center p-1 rounded transition-all ${deletingFileId === file.id ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
-                              title={`Delete Part ${file.partNumber || idx + 1}`}
-                            >
-                              <span className="material-symbols-outlined text-[18px]">
-                                {deletingFileId === file.id ? 'hourglass_empty' : 'delete'}
-                              </span>
-                            </button>
+                            <>
+                              <button 
+                                onClick={() => handleReorder(file, 'up')}
+                                className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
+                                title="Move up"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
+                              </button>
+                              <button 
+                                onClick={() => handleReorder(file, 'down')}
+                                className="text-text-muted hover:text-primary flex items-center justify-center p-1 transition-all"
+                                title="Move down"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">arrow_downward</span>
+                              </button>
+                              <button 
+                                onClick={() => setFileToDelete(file)}
+                                disabled={deletingFileId === file.id}
+                                className={`text-error hover:text-error-hover flex items-center justify-center p-1 rounded transition-all ${deletingFileId === file.id ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+                                title={`Delete Part ${file.partNumber || idx + 1}`}
+                              >
+                                <span className="material-symbols-outlined text-[18px]">
+                                  {deletingFileId === file.id ? 'hourglass_empty' : 'delete'}
+                                </span>
+                              </button>
+                            </>
                           )}
                           <button 
                             onClick={() => handleIndividualDownload(file)}
@@ -576,9 +797,9 @@ function DownloadAsset({ isAdmin }) {
               {/* Folder Interactive Tree Explorer */}
               {asset.uploadType === 'FOLDER' && folderTree && (
                 <div className="p-4 overflow-x-auto max-h-[440px] overflow-y-auto custom-scrollbar">
-                  {Object.keys(folderTree.children).length > 0 ? (
+                  {folderTree.childrenArray && folderTree.childrenArray.length > 0 ? (
                     <div className="flex flex-col gap-1">
-                      {Object.values(folderTree.children).map((child, idx) => (
+                      {folderTree.childrenArray.map((child, idx) => (
                         <TreeNode 
                           key={idx} 
                           node={child} 
@@ -587,6 +808,7 @@ function DownloadAsset({ isAdmin }) {
                           isAdmin={isAdmin}
                           onIndividualDelete={(file) => setFileToDelete(file)}
                           deletingFileId={deletingFileId}
+                          onReorder={handleReorder}
                         />
                       ))}
                     </div>

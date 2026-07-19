@@ -167,4 +167,77 @@ router.post('/upload-cancel/:uploadId', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * Append files to an existing upload session
+ * POST /api/telegram/upload-append
+ */
+router.post('/upload-append', requireAuth, async (req, res) => {
+  const { uploadId, assetId, files } = req.body;
+  if (!uploadId || !assetId || !files || files.length === 0) {
+    return sendError(res, 'uploadId, assetId, and files are required');
+  }
+
+  try {
+    const asset = await prisma.asset.findUnique({
+      where: { id: assetId },
+      include: { files: true }
+    });
+
+    if (!asset || (asset.uploadType !== 'MULTIPART' && asset.uploadType !== 'FOLDER')) {
+      return sendError(res, 'Invalid asset or asset type for appending');
+    }
+
+    const existingNames = new Set(asset.files.map(f => (f.relativePath || f.fileName).toLowerCase()));
+    const uploadType = asset.uploadType;
+    let maxPartNumber = 0;
+
+    if (uploadType === 'MULTIPART') {
+      maxPartNumber = asset.files.reduce((max, f) => Math.max(max, f.partNumber || 0), 0);
+    }
+
+    const totalSizeBytes = files.reduce((acc, f) => acc + BigInt(f.size || 0), BigInt(0));
+
+    // Check duplicates
+    for (const f of files) {
+      const pathToCheck = (f.path || f.name).toLowerCase();
+      if (existingNames.has(pathToCheck)) {
+        return sendError(res, `Duplicate file detected: ${f.name}`);
+      }
+    }
+
+    const sortedFiles = uploadType === 'MULTIPART' ? [...files].sort((a, b) => a.name.localeCompare(b.name)) : files;
+
+    // Create AssetFile records
+    await prisma.assetFile.createMany({
+      data: sortedFiles.map((f, idx) => ({
+        assetId: asset.id,
+        fileName: f.name,
+        fileSize: BigInt(f.size || 0),
+        relativePath: uploadType === 'FOLDER' ? (f.path || f.name) : null,
+        partNumber: uploadType === 'MULTIPART' ? (maxPartNumber + idx + 1) : null
+      }))
+    });
+
+    // Update asset total size
+    await prisma.asset.update({
+      where: { id: assetId },
+      data: {
+        sizeBytes: BigInt(asset.sizeBytes) + totalSizeBytes
+      }
+    });
+
+    // Store in database via setCurrentUploadId
+    await setCurrentUploadId(uploadId, {
+      assetId: asset.id,
+      uploadType: uploadType,
+      isAppend: true
+    });
+
+    return sendSuccess(res, { assetId: asset.id });
+  } catch (error) {
+    console.error('Error appending files to asset:', error);
+    return sendError(res, 'Failed to initialize append session', 500);
+  }
+});
+
 module.exports = router;
