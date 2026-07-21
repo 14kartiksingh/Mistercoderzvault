@@ -528,6 +528,71 @@ function DownloadAsset({ isAdmin }) {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleAppendMultipart = async () => {
+    const parts = parseInt(expectedPartsToAdd, 10);
+    if (isNaN(parts) || parts <= 0) {
+      alert('Please enter a valid positive number for Expected Parts to Add.');
+      return;
+    }
+
+    try {
+      setIsAppending(true);
+      setShowAppendInput(false);
+      setInitialFileCount(asset.files ? asset.files.length : 0);
+      
+      const newUploadId = 'upload_append_' + Math.random().toString(36).substr(2, 9);
+      
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/telegram/upload-append', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          uploadId: newUploadId,
+          assetId: asset.id,
+          expectedPartsToAdd: parts
+        })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Failed to start append session');
+      }
+
+      const botUrl = `https://t.me/${import.meta.env.VITE_TELEGRAM_BOT_USERNAME}?start=${newUploadId}`;
+      window.open(botUrl, '_blank', 'noopener,noreferrer');
+
+      pollingInterval.current = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`/api/telegram/status/${newUploadId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (pollRes.ok) {
+            const data = await pollRes.json();
+            if (data.status === 'complete') {
+              clearInterval(pollingInterval.current);
+              setIsAppending(false);
+              setIsAppendingComplete(true);
+              setExpectedPartsToAdd('');
+              fetchAsset();
+              setTimeout(() => setIsAppendingComplete(false), 5000);
+            } else {
+              fetchAsset();
+            }
+          }
+        } catch (err) {
+          console.error('Polling error', err);
+        }
+      }, 2000);
+      
+    } catch (err) {
+      alert(err.message);
+      setIsAppending(false);
+    }
+  };
+
   const handleIndividualDownload = (file) => {
     setDownloadStatuses(prev => ({ ...prev, [file.id]: 'active' }));
     
