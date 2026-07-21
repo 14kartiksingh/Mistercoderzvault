@@ -272,6 +272,9 @@ function DownloadAsset({ isAdmin }) {
   const [deletingFileId, setDeletingFileId] = useState(null);
   const [isAppending, setIsAppending] = useState(false);
   const [isAppendingComplete, setIsAppendingComplete] = useState(false);
+  const [showAppendInput, setShowAppendInput] = useState(false);
+  const [expectedPartsToAdd, setExpectedPartsToAdd] = useState('');
+  const [initialFileCount, setInitialFileCount] = useState(0);
   const [editingFileId, setEditingFileId] = useState(null);
   const [editingFileName, setEditingFileName] = useState('');
   const fileInputRef = useRef(null);
@@ -788,29 +791,80 @@ function DownloadAsset({ isAdmin }) {
                     {filesList.length} FILE{filesList.length !== 1 ? 'S' : ''}
                   </span>
                   {isAdmin && asset.uploadType !== 'SINGLE' && (
-                    <div className="relative">
-                      <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleAddFiles} 
-                        multiple 
-                        webkitdirectory={asset.uploadType === 'FOLDER' ? "true" : undefined}
-                        className="hidden" 
-                      />
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isAppending}
-                        className={`text-[10px] font-label-mono font-bold uppercase border transition-colors px-2 py-1 rounded-sm flex items-center gap-1 ${isAppendingComplete ? 'text-success border-success' : 'text-primary border-primary hover:bg-primary/10'}`}
-                      >
-                        {isAppending ? (
-                          <span className="material-symbols-outlined text-[14px] animate-spin">refresh</span>
-                        ) : isAppendingComplete ? (
-                          <span className="material-symbols-outlined text-[14px]">check</span>
-                        ) : (
-                          <span className="material-symbols-outlined text-[14px]">add</span>
-                        )}
-                        {isAppending ? 'ADDING...' : isAppendingComplete ? 'ADDED' : 'ADD FILES'}
-                      </button>
+                    <div className="relative flex items-center gap-2">
+                      {asset.uploadType === 'FOLDER' ? (
+                        <>
+                          <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleAddFiles} 
+                            multiple 
+                            webkitdirectory="true"
+                            className="hidden" 
+                          />
+                          <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isAppending}
+                            className={`text-[10px] font-label-mono font-bold uppercase border transition-colors px-2 py-1 rounded-sm flex items-center gap-1 ${isAppendingComplete ? 'text-success border-success' : 'text-primary border-primary hover:bg-primary/10'}`}
+                          >
+                            {isAppending ? (
+                              <span className="material-symbols-outlined text-[14px] animate-spin">refresh</span>
+                            ) : isAppendingComplete ? (
+                              <span className="material-symbols-outlined text-[14px]">check</span>
+                            ) : (
+                              <span className="material-symbols-outlined text-[14px]">add</span>
+                            )}
+                            {isAppending ? 'ADDING...' : isAppendingComplete ? 'ADDED' : 'ADD FILES'}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {showAppendInput ? (
+                            <div className="flex items-center gap-1 animate-fadeIn">
+                              <input
+                                type="number"
+                                min="1"
+                                placeholder="Expected Parts..."
+                                value={expectedPartsToAdd}
+                                onChange={(e) => setExpectedPartsToAdd(e.target.value)}
+                                className="bg-surface-container border border-border-subtle text-text-high-contrast text-[10px] font-label-mono px-2 py-1 rounded-sm w-32 focus:outline-none focus:border-primary placeholder:text-text-muted/50"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleAppendMultipart();
+                                  if (e.key === 'Escape') setShowAppendInput(false);
+                                }}
+                              />
+                              <button 
+                                onClick={handleAppendMultipart}
+                                className="bg-primary text-background hover:bg-primary/90 flex items-center justify-center p-1 rounded-sm transition-all"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">check</span>
+                              </button>
+                              <button 
+                                onClick={() => setShowAppendInput(false)}
+                                className="bg-surface border border-border-subtle hover:text-error flex items-center justify-center p-1 rounded-sm transition-all"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">close</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setShowAppendInput(true)}
+                              disabled={isAppending}
+                              className={`text-[10px] font-label-mono font-bold uppercase border transition-colors px-2 py-1 rounded-sm flex items-center gap-1 ${isAppendingComplete ? 'text-success border-success' : 'text-primary border-primary hover:bg-primary/10'}`}
+                            >
+                              {isAppending ? (
+                                <span className="material-symbols-outlined text-[14px] animate-spin">refresh</span>
+                              ) : isAppendingComplete ? (
+                                <span className="material-symbols-outlined text-[14px]">check</span>
+                              ) : (
+                                <span className="material-symbols-outlined text-[14px]">add</span>
+                              )}
+                              {isAppending ? `APPENDING... ${Math.max(0, filesList.length - initialFileCount)} / ${expectedPartsToAdd}` : isAppendingComplete ? 'ADDED' : 'ADD FILES'}
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

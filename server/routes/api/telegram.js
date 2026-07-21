@@ -172,9 +172,10 @@ router.post('/upload-cancel/:uploadId', requireAuth, async (req, res) => {
  * POST /api/telegram/upload-append
  */
 router.post('/upload-append', requireAuth, async (req, res) => {
-  const { uploadId, assetId, files } = req.body;
-  if (!uploadId || !assetId || !files || files.length === 0) {
-    return sendError(res, 'uploadId, assetId, and files are required');
+  const { uploadId, assetId, files, expectedPartsToAdd } = req.body;
+  
+  if (!uploadId || !assetId) {
+    return sendError(res, 'uploadId and assetId are required');
   }
 
   try {
@@ -187,50 +188,56 @@ router.post('/upload-append', requireAuth, async (req, res) => {
       return sendError(res, 'Invalid asset or asset type for appending');
     }
 
-    const existingNames = new Set(asset.files.map(f => (f.relativePath || f.fileName).toLowerCase()));
     const uploadType = asset.uploadType;
-    let maxPartNumber = 0;
-
+    let expectedTotalParts = 0;
+    
     if (uploadType === 'MULTIPART') {
-      maxPartNumber = asset.files.reduce((max, f) => Math.max(max, f.partNumber || 0), 0);
-    }
-
-    const totalSizeBytes = files.reduce((acc, f) => acc + BigInt(f.size || 0), BigInt(0));
-
-    // Check duplicates
-    for (const f of files) {
-      const pathToCheck = (f.path || f.name).toLowerCase();
-      if (existingNames.has(pathToCheck)) {
-        return sendError(res, `Duplicate file detected: ${f.name}`);
+      if (!expectedPartsToAdd || expectedPartsToAdd <= 0) {
+        return sendError(res, 'expectedPartsToAdd is required for MULTIPART appends');
+      }
+    } else {
+      if (!files || files.length === 0) {
+        return sendError(res, 'files are required for FOLDER appends');
       }
     }
 
-    const sortedFiles = uploadType === 'MULTIPART' ? [...files].sort((a, b) => a.name.localeCompare(b.name)) : files;
+    // Logic for FOLDER (legacy append)
+    if (uploadType === 'FOLDER') {
+      const existingNames = new Set(asset.files.map(f => (f.relativePath || f.fileName).toLowerCase()));
+      const totalSizeBytes = files.reduce((acc, f) => acc + BigInt(f.size || 0), BigInt(0));
 
-    // Create AssetFile records
-    await prisma.assetFile.createMany({
-      data: sortedFiles.map((f, idx) => ({
-        assetId: asset.id,
-        fileName: f.name,
-        fileSize: BigInt(f.size || 0),
-        relativePath: uploadType === 'FOLDER' ? (f.path || f.name) : null,
-        partNumber: uploadType === 'MULTIPART' ? (maxPartNumber + idx + 1) : null
-      }))
-    });
-
-    // Update asset total size
-    await prisma.asset.update({
-      where: { id: assetId },
-      data: {
-        sizeBytes: BigInt(asset.sizeBytes) + totalSizeBytes
+      for (const f of files) {
+        const pathToCheck = (f.path || f.name).toLowerCase();
+        if (existingNames.has(pathToCheck)) {
+          return sendError(res, `Duplicate file detected: ${f.name}`);
+        }
       }
-    });
+
+      await prisma.assetFile.createMany({
+        data: files.map((f) => ({
+          assetId: asset.id,
+          fileName: f.name,
+          fileSize: BigInt(f.size || 0),
+          relativePath: (f.path || f.name),
+          partNumber: null
+        }))
+      });
+
+      await prisma.asset.update({
+        where: { id: assetId },
+        data: {
+          sizeBytes: BigInt(asset.sizeBytes) + totalSizeBytes
+        }
+      });
+    }
 
     // Store in database via setCurrentUploadId
     await setCurrentUploadId(uploadId, {
       assetId: asset.id,
       uploadType: uploadType,
-      isAppend: true
+      isAppend: true,
+      existingParts: uploadType === 'MULTIPART' ? asset.files.length : undefined,
+      expectedPartsToAdd: uploadType === 'MULTIPART' ? expectedPartsToAdd : undefined
     });
 
     return sendSuccess(res, { assetId: asset.id });

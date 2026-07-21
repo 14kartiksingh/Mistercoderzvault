@@ -251,6 +251,9 @@ const initBot = () => {
       ? JSON.parse(activeSession.metadata)
       : activeSession.metadata;
     
+    let fileObj;
+    let fileName;
+
     if (msg.document) {
       fileObj = msg.document;
       fileName = msg.document.file_name || 'Document';
@@ -361,9 +364,12 @@ const initBot = () => {
             console.error('Error saving SINGLE asset to database:', dbError);
             bot.sendMessage(chatId, 'Error saving asset to database. Please try again.');
           }
-        } else if (uploadType === 'MULTIPART' && !currentMetadata.isAppend) {
-          // New MULTIPART upload: Count files instead of matching
+        } else if (uploadType === 'MULTIPART') {
+          // New MULTIPART upload or MULTIPART Append: Count files instead of matching
           const assetId = currentMetadata.assetId;
+          const isAppend = currentMetadata.isAppend;
+          const existingParts = currentMetadata.existingParts ? parseInt(currentMetadata.existingParts, 10) : 0;
+          const expectedPartsToAdd = currentMetadata.expectedPartsToAdd ? parseInt(currentMetadata.expectedPartsToAdd, 10) : 0;
           const expectedParts = currentMetadata.expectedParts ? parseInt(currentMetadata.expectedParts, 10) : 0;
           
           try {
@@ -396,10 +402,33 @@ const initBot = () => {
               });
             }
 
-            console.log(`[Multipart] Received part ${partNumber} / ${expectedParts} for asset ${assetId}`);
             writeLog(userId, newFile.fileName, fileSize, fileId, 'SUCCESS');
 
-            if (partNumber >= expectedParts) {
+            let isComplete = false;
+            let progressMsg = '';
+            
+            if (isAppend) {
+              const currentAdded = currentFilesCount + 1 - existingParts;
+              console.log(`[Multipart Append] Received part ${currentAdded} / ${expectedPartsToAdd} for asset ${assetId}`);
+              
+              if (currentFilesCount + 1 >= existingParts + expectedPartsToAdd) {
+                isComplete = true;
+                progressMsg = `✅ All files appended successfully!\n\nAsset "${currentMetadata.title || 'Asset'}" is now updated.`;
+              } else {
+                progressMsg = `📥 Appending Parts...\n\n${currentAdded} / ${expectedPartsToAdd}`;
+              }
+            } else {
+              console.log(`[Multipart] Received part ${partNumber} / ${expectedParts} for asset ${assetId}`);
+              
+              if (partNumber >= expectedParts) {
+                isComplete = true;
+                progressMsg = `✅ Upload completed.\n\nAsset "${currentMetadata.title || 'Asset'}" is now available in the Vault.`;
+              } else {
+                progressMsg = `📥 ${partNumber} / ${expectedParts} Parts Received.\n\nPlease send the next part.`;
+              }
+            }
+
+            if (isComplete) {
               // Upload Complete
               await prisma.asset.update({
                 where: { id: assetId },
@@ -407,10 +436,10 @@ const initBot = () => {
               });
               await markUploadComplete(activeSession.id);
               await clearSession();
-              bot.sendMessage(chatId, `✅ Upload completed.\n\nAsset "${currentMetadata.title || 'Upload'}" is now available in the Vault.`);
+              bot.sendMessage(chatId, progressMsg);
             } else {
               // Send progress message
-              bot.sendMessage(chatId, `📥 ${partNumber} / ${expectedParts} Parts Received.\n\nPlease send the next part.`);
+              bot.sendMessage(chatId, progressMsg);
             }
           } catch (err) {
             console.error('Error processing MULTIPART asset file:', err);
