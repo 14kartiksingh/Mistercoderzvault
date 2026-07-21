@@ -142,17 +142,41 @@ const deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if category contains any assets (including soft-deleted)
-    const assetCount = await prisma.asset.count({
+    // 1. Check if category contains any ACTIVE assets
+    const activeAssetCount = await prisma.asset.count({
       where: {
-        categoryId: id
+        categoryId: id,
+        ...ACTIVE_ASSET_FILTER
       }
     });
 
-    if (assetCount > 0) {
-      return sendError(res, `Cannot delete category because it still contains ${assetCount} assets.`, 409);
+    if (activeAssetCount > 0) {
+      return sendError(res, `Cannot delete category because it still contains ${activeAssetCount} active assets.`, 409);
     }
 
+    // 2. Since there are no active assets, we can safely delete the category.
+    // To prevent Prisma P2003 foreign key constraints, we must first 
+    // permanently wipe any soft-deleted or pending assets that still belong to it.
+    
+    const assetsToDelete = await prisma.asset.findMany({
+      where: { categoryId: id },
+      select: { id: true }
+    });
+    
+    const assetIds = assetsToDelete.map(a => a.id);
+
+    if (assetIds.length > 0) {
+      // Hard delete associated files first
+      await prisma.assetFile.deleteMany({
+        where: { assetId: { in: assetIds } }
+      });
+      // Hard delete the assets themselves
+      await prisma.asset.deleteMany({
+        where: { id: { in: assetIds } }
+      });
+    }
+
+    // 3. Delete the category safely
     await prisma.category.delete({
       where: { id }
     });
@@ -161,7 +185,7 @@ const deleteCategory = async (req, res) => {
   } catch (error) {
     console.error('Error deleting category:', error);
     if (error.code === 'P2003') {
-      return sendError(res, 'Cannot delete category because it still contains assets.', 409);
+      return sendError(res, 'Cannot delete category because it still contains active assets.', 409);
     }
     return sendError(res, 'Failed to delete category', 500);
   }
