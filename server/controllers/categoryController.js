@@ -13,7 +13,7 @@ const getCategories = async (req, res) => {
       where,
       include: {
         _count: {
-          select: { assets: { where: { isDeleted: false } } }
+          select: { assets: true }
         }
       },
       orderBy: { order: 'asc' },
@@ -139,16 +139,15 @@ const deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if category contains assets
+    // Check if category contains any assets (including soft-deleted)
     const assetCount = await prisma.asset.count({
       where: {
-        categoryId: id,
-        isDeleted: false
+        categoryId: id
       }
     });
 
     if (assetCount > 0) {
-      return sendError(res, 'Cannot delete category that contains active assets', 400);
+      return sendError(res, `Cannot delete category because it still contains ${assetCount} assets.`, 409);
     }
 
     await prisma.category.delete({
@@ -158,6 +157,9 @@ const deleteCategory = async (req, res) => {
     return sendSuccess(res, { message: 'Category deleted successfully' });
   } catch (error) {
     console.error('Error deleting category:', error);
+    if (error.code === 'P2003') {
+      return sendError(res, 'Cannot delete category because it still contains assets.', 409);
+    }
     return sendError(res, 'Failed to delete category', 500);
   }
 };
