@@ -1,5 +1,6 @@
 const prisma = require('../config/db');
 const { sendSuccess, sendError } = require('../utils/response');
+const { ACTIVE_ASSET_FILTER } = require('../utils/constants');
 
 /**
  * Get all categories
@@ -13,7 +14,9 @@ const getCategories = async (req, res) => {
       where,
       include: {
         _count: {
-          select: { assets: true }
+          select: { 
+            assets: showAll ? true : { where: ACTIVE_ASSET_FILTER }
+          }
         }
       },
       orderBy: { order: 'asc' },

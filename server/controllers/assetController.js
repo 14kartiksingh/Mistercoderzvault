@@ -4,13 +4,14 @@ const { getBot } = require('../utils/telegramBot');
 const https = require('https');
 const { Api } = require('telegram');
 const { getTelegramClient, initTelegramClient } = require('../utils/telegramClient');
+const { ACTIVE_ASSET_FILTER } = require('../utils/constants');
 /**
  * Get all active assets
  */
 const getAssets = async (req, res) => {
   try {
     const { categorySlug } = req.query;
-    const whereClause = { isDeleted: false, isPending: false };
+    const whereClause = { ...ACTIVE_ASSET_FILTER };
     
     if (categorySlug) {
       whereClause.category = { slug: categorySlug };
