@@ -15,7 +15,7 @@ const getCategories = async (req, res) => {
       include: {
         _count: {
           select: { 
-            assets: showAll ? true : { where: ACTIVE_ASSET_FILTER }
+            assets: { where: ACTIVE_ASSET_FILTER }
           }
         }
       },
