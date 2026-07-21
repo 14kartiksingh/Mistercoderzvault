@@ -243,6 +243,7 @@ const TreeNode = ({ node, downloadStatuses, onIndividualDownload, isAdmin, onInd
                 </span>
               </button>
             </>
+            )
           )}
           <button 
             onClick={() => onIndividualDownload(node.file)}
