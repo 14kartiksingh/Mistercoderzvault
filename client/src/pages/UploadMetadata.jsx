@@ -19,7 +19,8 @@ function UploadMetadata() {
     title: '',
     description: '',
     category: 'Games',
-    uploadType: 'SINGLE'
+    uploadType: 'SINGLE',
+    expectedParts: ''
   });
   const [categories, setCategories] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -72,9 +73,17 @@ function UploadMetadata() {
       return;
     }
 
-    if (formData.uploadType !== 'SINGLE' && selectedFiles.length === 0) {
-      setError(`Please select files to upload for a ${formData.uploadType === 'MULTIPART' ? 'Multipart Archive' : 'Folder'}.`);
+    if (formData.uploadType === 'FOLDER' && selectedFiles.length === 0) {
+      setError('Please select files to upload for a Folder.');
       return;
+    }
+
+    if (formData.uploadType === 'MULTIPART') {
+      const parts = parseInt(formData.expectedParts, 10);
+      if (isNaN(parts) || parts <= 0) {
+        setError('Please enter a valid positive number for Expected Parts.');
+        return;
+      }
     }
 
     try {
@@ -90,7 +99,8 @@ function UploadMetadata() {
             ...formData,
             tags: [],
             thumbnail: '',
-            files: selectedFiles
+            files: formData.uploadType === 'MULTIPART' ? [] : selectedFiles,
+            expectedParts: formData.uploadType === 'MULTIPART' ? parseInt(formData.expectedParts, 10) : undefined
           }
         })
       });
@@ -222,7 +232,7 @@ function UploadMetadata() {
   if (uploadState === 'uploading') {
     const files = assetDetails?.files || [];
     const uploadedCount = files.filter(f => f.telegramFileId).length;
-    const totalCount = files.length;
+    const totalCount = formData.uploadType === 'MULTIPART' ? (parseInt(formData.expectedParts, 10) || 0) : files.length;
 
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-sans">
@@ -383,17 +393,34 @@ function UploadMetadata() {
             </div>
           </div>
 
-          {formData.uploadType !== 'SINGLE' && (
+          {formData.uploadType === 'MULTIPART' && (
+            <div className="space-y-1.5 animate-fadeIn">
+              <label className="block text-sm font-semibold text-text-high-contrast" htmlFor="expectedParts">
+                Expected Parts *
+              </label>
+              <input
+                id="expectedParts"
+                name="expectedParts"
+                type="number"
+                min="1"
+                value={formData.expectedParts}
+                onChange={handleChange}
+                className="w-full px-4 py-3 bg-surface-container border border-border-subtle rounded-xl text-text-high-contrast focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-text-muted/50"
+                placeholder="e.g. 36"
+              />
+            </div>
+          )}
+
+          {formData.uploadType === 'FOLDER' && (
             <div className="space-y-1.5 animate-fadeIn">
               <label className="block text-sm font-semibold text-text-high-contrast">
-                {formData.uploadType === 'MULTIPART' ? 'Select Archive Parts *' : 'Select Folder *'}
+                Select Folder *
               </label>
               <div className="relative w-full h-12 bg-surface-container border border-border-subtle rounded-xl hover:border-primary/50 transition-colors flex items-center px-4 cursor-pointer overflow-hidden group">
                 <input
                   type="file"
-                  multiple={formData.uploadType === 'MULTIPART'}
-                  webkitdirectory={formData.uploadType === 'FOLDER' ? '' : undefined}
-                  directory={formData.uploadType === 'FOLDER' ? '' : undefined}
+                  webkitdirectory=""
+                  directory=""
                   onChange={handleFilesChange}
                   className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
                 />

@@ -66,11 +66,11 @@ router.post('/upload-start', requireAuth, async (req, res) => {
             connectOrCreate: tagConnectOrCreate,
           },
           files: {
-            create: sortedFiles.map((f, idx) => ({
+            create: uploadType === 'MULTIPART' ? [] : sortedFiles.map((f) => ({
               fileName: f.name,
               fileSize: BigInt(f.size || 0),
               relativePath: f.path || null,
-              partNumber: uploadType === 'MULTIPART' ? (idx + 1) : null
+              partNumber: null
             }))
           }
         }

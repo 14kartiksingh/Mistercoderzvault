@@ -361,8 +361,63 @@ const initBot = () => {
             console.error('Error saving SINGLE asset to database:', dbError);
             bot.sendMessage(chatId, 'Error saving asset to database. Please try again.');
           }
+        } else if (uploadType === 'MULTIPART' && !currentMetadata.isAppend) {
+          // New MULTIPART upload: Count files instead of matching
+          const assetId = currentMetadata.assetId;
+          const expectedParts = currentMetadata.expectedParts ? parseInt(currentMetadata.expectedParts, 10) : 0;
+          
+          try {
+            // Count current files
+            const currentFilesCount = await prisma.assetFile.count({
+              where: { assetId: assetId }
+            });
+
+            const partNumber = currentFilesCount + 1;
+            const finalFileName = fileName !== 'Document' ? fileName : `Part_${partNumber}`;
+            
+            // Create the new AssetFile record
+            const newFile = await prisma.assetFile.create({
+              data: {
+                assetId: assetId,
+                fileName: finalFileName,
+                fileSize: BigInt(fileSize),
+                telegramFileId: fileId,
+                telegramMessageId: result.message_id,
+                partNumber: partNumber
+              }
+            });
+
+            // Update parent Asset sizeBytes
+            const parentAsset = await prisma.asset.findUnique({ where: { id: assetId } });
+            if (parentAsset) {
+              await prisma.asset.update({
+                where: { id: assetId },
+                data: { sizeBytes: parentAsset.sizeBytes + BigInt(fileSize) }
+              });
+            }
+
+            console.log(`[Multipart] Received part ${partNumber} / ${expectedParts} for asset ${assetId}`);
+            writeLog(userId, newFile.fileName, fileSize, fileId, 'SUCCESS');
+
+            if (partNumber >= expectedParts) {
+              // Upload Complete
+              await prisma.asset.update({
+                where: { id: assetId },
+                data: { isPending: false }
+              });
+              await markUploadComplete(activeSession.id);
+              await clearSession();
+              bot.sendMessage(chatId, `✅ Upload completed.\n\nAsset "${currentMetadata.title || 'Upload'}" is now available in the Vault.`);
+            } else {
+              // Send progress message
+              bot.sendMessage(chatId, `📥 ${partNumber} / ${expectedParts} Parts Received.\n\nPlease send the next part.`);
+            }
+          } catch (err) {
+            console.error('Error processing MULTIPART asset file:', err);
+            bot.sendMessage(chatId, 'Error saving part to database. Please try again.');
+          }
         } else {
-          // MULTIPART or FOLDER upload: match files using filename + fileSize
+          // FOLDER or APPEND upload: match files using filename + fileSize
           const assetId = currentMetadata.assetId;
           try {
             // Find all pending files for this asset
